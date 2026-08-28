@@ -1,0 +1,14 @@
+# Secrets — NEVER commit
+Billetera 24 Palabras.txt
+*.seed
+*.key
+
+# Reference material / large binaries (not part of the doc site)
+*.pdf
+/1.jpeg
+/2.jpeg
+/3.jpeg
+
+# Tooling / editor
+.playwright-mcp/
+.vscode/

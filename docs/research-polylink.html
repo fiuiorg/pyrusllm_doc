@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PolyLink — Research — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/research-polylink.html">
+
+<article id="doc">
+<div class="crumb">Research / Paper notes</div>
+<h1>PolyLink</h1>
+<p class="lede"><em>"PolyLink: A Blockchain Based Decentralized Edge AI Platform for
+LLM Inference."</em> PolyU Hong Kong + China Mobile (HK). arXiv 2510.02395v1, cs.CR,
+1 Oct 2025. <a href="../2510.02395v1.pdf">PDF</a>. 8 pages, read in full.</p>
+
+<h2 id="what">What it is</h2>
+<p><strong>PolyLink</strong> is a decentralized marketplace for LLM inference on
+heterogeneous edge devices, settled on-chain. It is, in substance, the same product
+as PyrusLLM, published as an academic system. Three claimed contributions:</p>
+<ol>
+<li>Inference on heterogeneous workers, both single-device and cross-device (sharding via EdgeShard).</li>
+<li><strong>TIQE</strong> (Trustless Inference Quality Evaluation) — verifying inference integrity without a central authority.</li>
+<li>An incentive model with three paid roles: worker, validator, and <strong>model provider</strong>.</li>
+</ol>
+<p>Real deployment: 20 devices, 10 workers, across Hong Kong, Guangzhou, Shenzhen and
+Kanazawa. ERC-20 contracts on Sepolia.</p>
+
+<h2 id="how">How it works</h2>
+<p><strong>Architecture.</strong> An API server receives requests, <strong>batches
+them by model</strong> and routes each batch to the worker serving that model.
+Validators score afterward. The blockchain stores invoke/inference/score records.</p>
+<p><strong>TIQE — the core of the paper.</strong> Per epoch:</p>
+<ul>
+<li>A validator committee is chosen by <strong>VRF</strong> over <code>H_prev ‖ H(epoch)</code>, with a proof π anyone can verify.</li>
+<li>Every batch is scored with a <strong>cross-encoder</strong> (<code>ms-marco-MiniLM-L6-v2</code>): prompt↔response semantic similarity. Cheap.</li>
+<li>At a <strong>random point in the epoch</strong>, an LLM-as-a-Judge run (the DeepSeek API) scores it too, weighted more heavily.</li>
+<li><code>Score_final = λ·Score_llm + (1−λ)·Score_cross</code> → this becomes α, the <em>model quality score</em>.</li>
+<li>Validators submit their score to the contract, which takes the <strong>median</strong>; whoever deviates beyond a threshold <code>Th</code> gets <strong>slashed</strong>.</li>
+</ul>
+<p><strong>Incentives.</strong> <code>R_worker = α(1−β)·R_batch</code>,
+<code>R_validators = [β + (1−α)(1−β)]·R_batch</code>. The model provider is paid a
+Model Usage Fee, charged to the worker.</p>
+
+<h2 id="numbers">The numbers that matter</h2>
+<div class="tw"><table class="num">
+<thead><tr><th>Measurement</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>Cross-encoder: degradation detection</td><td>TP 66%, FP 2%</td></tr>
+<tr><td>LLM-as-Judge: detection</td><td>TP 98%, FP 12%</td></tr>
+<tr><td>Cross-encoder latency</td><td>10 ms (batch 1) → 250 ms (batch 128)</td></tr>
+<tr><td>LLM-judge latency</td><td>10–30 s per batch</td></tr>
+<tr><td>LLM-judge cost</td><td>~$0.04 per batch of 128 → ~$0.0003/request</td></tr>
+<tr><td>14B on RTX 4090 (1 device)</td><td>17.3 s latency, 55.7 tok/s</td></tr>
+<tr><td>14B <strong>cross-device</strong> (3080Ti + 4060Ti)</td><td><strong>160 s</strong>, 7.1 tok/s</td></tr>
+<tr><td>7B on MacBook M3 Pro</td><td>52.8 s, TTFT 17.6 s, <strong>5% failure rate</strong></td></tr>
+</tbody></table></div>
+
+<h2 id="conclusions">Conclusions</h2>
+<p><strong>1. Cross-device sharding does not work as a product.</strong> 160 s and
+7 tok/s versus 17 s on a single 4090 — a 9x penalty for splitting the model across
+devices. The paper admits it in its own limitations section ("network communication
+latency, so the number of devices is limited"). <em>Takeaway: don't build sharding.
+Route to whoever holds the whole model.</em> That's an entire engineering front saved,
+with published empirical evidence to justify skipping it.</p>
+
+<p><strong>2. The "decentralized" paper has a central operator</strong> — the same
+one PyrusLLM's own design identifies as the thing to avoid. The API server that
+batches and routes runs on <strong>a single 4-core cloud instance</strong>. It sees
+who asks and who answers. That's exactly the coordinator whose absence is PyrusLLM's
+differentiator. Published academic state of the art did <strong>not</strong> solve
+this — real, citable competitive positioning.</p>
+
+<p><strong>3. TIQE conflates two different problems.</strong> It verifies
+<em>response quality</em>, not <em>which model actually ran</em>. The judge prompt
+(Fig. 3) literally says "rate the quality of the following LLM inference result" —
+never mentions what model was supposed to run. A worker who announces a 14B and
+quietly serves a 1.5B with decent-sounding answers <strong>still scores well</strong>.
+That's why the cross-encoder only catches 66% — it's measuring relevance, not
+provenance. The methods that actually attack this (TOPLOC, SPEX — LSH over
+activations) are cited in the paper and then discarded.</p>
+
+<p><strong>4. The validator incentive is inverted.</strong> Look at the formula: the
+validator payout <code>β + (1−α)(1−β)</code> is <strong>strictly decreasing in
+α</strong>. At α=1 they earn β=0.3; at α=0 they earn <strong>100% of the batch</strong>.
+And slashing only punishes <em>deviating from the median</em>, not scoring low. So a
+committee that scores uniformly low — through collusion, or simply shared bias —
+<strong>earns more, and nobody deviates</strong>. Figure 7 draws this without seeming
+to notice. It's the most serious flaw in the design.</p>
+
+<p><strong>5. The user always pays in full.</strong> <code>C_inference</code> does
+not depend on α. If the answer is garbage, the user still pays, and that money
+<strong>goes to the validators</strong>. No refund, no discount. Economically
+unsustainable on the demand side.</p>
+
+<p><strong>6. The most trusted signal is a centralized API.</strong> LLM-as-a-Judge,
+which carries the larger weight λ, is invoked against DeepSeek's commercial API. The
+"trustless" protocol depends on a single external provider that can go down, reprice,
+or silently swap models underneath it. A direct contradiction of the decentralization
+claim.</p>
+
+<p><strong>7. A 12% false-positive rate is expensive when α multiplies pay.</strong>
+1 in 8 honest batches gets penalized. With <code>R_worker = α(1−β)R_batch</code> that
+is pure variance injected into an honest provider's income — exactly what breaks the
+"your hardware is a yield-bearing asset" pitch.</p>
+
+<p><strong>8. A 5% failure rate.</strong> The paper presents this as a success
+("below 5%"). As a product SLA it's 1 in 20 requests that never completes. No retry,
+no failover in the design.</p>
+
+<h2 id="ideas">Ideas for PyrusLLM</h2>
+
+<h3>Verifiable quality (the most useful challenge this paper informs)</h3>
+<p><strong>Separate the two questions</strong> instead of conflating them the way
+PolyLink does:</p>
+<ul>
+<li><em>Did you actually run the model you claimed?</em> → a TOPLOC-style commitment over activations, or <strong>canaries</strong>: known-answer prompts injected into normal traffic.</li>
+<li><em>Was the answer good?</em> → cross-encoder + LLM-judge.</li>
+</ul>
+<p><strong>Canaries are where PyrusLLM's architecture beats this paper.</strong>
+PolyLink can't inject undetectable probes because its API server is visible and the
+worker knows exactly where every request comes from. In PyrusLLM's design, the
+enclave does the matching and decouples identity — the provider cannot tell a probe
+from a real user. <em>The privacy layer is what makes verification work.</em> That's
+a strong argument, and exactly the kind of synergy worth stating explicitly.</p>
+<p><strong>Run the cross-encoder inside the enclave.</strong> MiniLM-L6-v2 is ~22M
+parameters, 10 ms on CPU. If a confidential job is already metering requests, scoring
+rides along for free. That <strong>eliminates the entire validator committee</strong>
+— no stake, no slashing, no median consensus, no VRF, none of the three attack
+surfaces analyzed above. The enclave <em>is</em> the validator, and its code is
+public.</p>
+<p><strong>Random spot-checks, but genuinely unpredictable.</strong> PolyLink derives
+"a random point in the epoch" from the chain — predictable in principle. An enclave
+holds secrets and can decide, in a way nobody can game, which requests to audit.</p>
+<p><strong>The economics check out.</strong> $0.0003 per judged request. Auditing
+2–5% of traffic with an LLM-judge costs next to nothing next to the value of the
+inference itself.</p>
+
+<h3>Economic layer</h3>
+<p><strong>Don't use α as a pay multiplier.</strong> That's the paper's costly
+mistake (12% FP × variable income). Instead:</p>
+<ul>
+<li><strong>Payment</strong> = tokens delivered × price. Deterministic, auditable, no variance for an honest provider.</li>
+<li><strong>Quality</strong> = an EWMA over many batches → feeds <strong>routing priority</strong> and <strong>eviction</strong>, not the payout.</li>
+</ul>
+<p>A bad provider loses <em>traffic</em>, not <em>money per request</em>. Fairer,
+more stable, and the incentive points the same direction without punishing
+statistical noise.</p>
+<p><strong>Never let a role earn more when quality drops.</strong> A design rule
+that follows directly from flaw #4.</p>
+<p><strong>Define what happens to a bad response.</strong> PolyLink charges anyway. A
+discount or credit tied to the score is a real product differentiator and disciplines
+the supply side.</p>
+
+<h3>Model provider fee, and honest framing</h3>
+<p>The <strong>model provider as a third paid role</strong> (the Model Usage Fee) is
+the genuinely novel idea PolyLink claims, and PyrusLLM lacks it today — the economy
+currently has hardware providers and users, nothing rewarding whoever brings a good
+fine-tune to the network. Cheap to add now, expensive to retrofit.</p>
+<p><strong>Verification is post-hoc, not preventive</strong> — TIQE runs 10–30 s
+<em>after</em> the response, and the user has already received it. That's fine — it's
+the only viable design — but say so explicitly: quality guarantees are
+<strong>statistical and reputational</strong>, not per-request. More credible in a
+pitch than promising verification it can't actually deliver.</p>
+<p><strong>Retry and failover.</strong> The 5% failure rate is the metric PyrusLLM's
+gateway should attack that PolyLink doesn't. Cheap differentiation.</p>
+
+<h2 id="pitch">For the pitch</h2>
+<p>PolyLink is a citable academic baseline with real hardware and published numbers:
+latency, throughput, cost, detection accuracy. "Published state of the art does X, we
+do Y" beats comparing against an abstraction. Its related-work table (zkLLM: 803 s
+per proof; SVIP: needs a TTP; TOPLOC/SPEX: LSH) is a ready-made map of verification
+options.</p>
+
+<div class="note i">PyrusLLM's application to Vela flags an open risk: "a round trip
+to the enclave per request may not be viable." Two other papers in this set —
+<a href="research-deserve.html">DeServe</a> and <a href="research-aeria.html">AERIA</a>
+— turn that from an open question into a concrete plan.</div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/overview.html">
+
+<article id="doc">
+<div class="crumb">Documentation / Getting started</div>
+<h1>Overview</h1>
+<p class="lede">PyrusLLM turns a machine into a node on a peer-to-peer inference
+marketplace. Each node announces a <strong>signed manifest</strong> declaring which model
+it serves, what it charges and how loaded it is. Any node can ask any other for a
+completion, and the answer arrives with provenance attached: which machine produced
+it, how fast, and what it cost.</p>
+
+<h2 id="what-it-does">What it does</h2>
+<div class="cards">
+  <div class="card">
+    <div class="ico">&#128421;&#65039;</div><b>Runs locally</b>
+    <p>Weights travel over hypercore, not HTTP, and are cached on disk. Nothing
+    leaves your machine unless you ask it to.</p>
+  </div>
+  <div class="card">
+    <div class="ico">&#128279;</div><b>Joins a network</b>
+    <p>A fixed DHT topic discovers peers. Only nodes whose signed manifest verifies
+    become routing candidates.</p>
+  </div>
+  <div class="card">
+    <div class="ico">&#128176;</div><b>Gets paid</b>
+    <p>The manifest carries a payout address. Paid requests settle over x402 and come
+    back with a receipt and an attestation.</p>
+  </div>
+</div>
+
+<h2 id="cli-or-api">Is PyrusLLM a CLI or an API?</h2>
+<p><strong>It is both</strong>, and the distinction matters because they are used by
+different people at different moments.</p>
+
+<div class="tw"><table>
+<thead><tr><th>Surface</th><th>What it is</th><th>Who uses it</th></tr></thead>
+<tbody>
+<tr>
+  <td><code>pyrusllm &lt;cmd&gt;</code></td>
+  <td>A <strong>CLI</strong> you run in a terminal. It is how you start the node, join
+      the network, run a one-off prompt, move files and manage the wallet.</td>
+  <td>The <strong>operator</strong> of the machine.</td>
+</tr>
+<tr>
+  <td><code>http://localhost:8787/v1/…</code></td>
+  <td>An <strong>HTTP API</strong> served by <code>pyrusllm serve</code>. The
+      <code>/v1/chat/completions</code> and <code>/v1/models</code> routes are
+      OpenAI-compatible; the rest are PyrusLLM's own.</td>
+  <td><strong>Clients and agents</strong> — any OpenAI SDK, curl, Open WebUI, a
+      Telegram bot.</td>
+</tr>
+</tbody></table></div>
+
+<div class="note i">
+<b>The relationship:</b> the CLI command <code>pyrusllm serve</code> is what
+<em>starts</em> the API. Everything the browser panels do, they do through that same
+public API with a Bearer key — there is no privileged path reserved for the UI.
+</div>
+
+<h2 id="architecture">Architecture, in one pass</h2>
+<p>Three pieces cooperate on every node:</p>
+<ul>
+<li><strong>The gateway</strong> (<a href="cli.html#cli-serve"><code>pyrusllm serve</code></a>)
+    — the OpenAI-compatible HTTP surface, the router that picks a peer by load and
+    price, and the four browser panels.</li>
+<li><strong>The swarm</strong> — a fixed DHT topic where nodes discover each other and
+    exchange <a href="api-network.html#ep-manifest">signed manifests</a>. A manifest
+    that does not verify is never a routing candidate.</li>
+<li><strong>The wallet</strong> — an Ed25519/EVM keypair the node uses to sign
+    <a href="api-economics.html#x402">attestations</a> and receive x402 settlements.</li>
+</ul>
+<p>See <a href="../docs/research-decisions.html">Research → What to build first</a> for
+how a fourth piece — a signed inference receipt — extends this model.</p>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API — Inference — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/api-inference.html">
+
+<article id="doc">
+<div class="crumb">Documentation / API reference</div>
+<h1>Inference</h1>
+<p class="lede">The OpenAI-compatible surface: send a chat request, get an answer
+from whichever node in the network can serve it best.</p>
+
+<h2 id="ep-chat">Create a chat completion</h2>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/chat/completions</span><span class="auth">Bearer</span><a class="try" href="playground.html?ep=chat">Try it &rarr;</a></div>
+<p>OpenAI-compatible. The gateway picks a node by load and price, streams the answer
+back, and attaches provenance headers.</p>
+
+<h4>Body</h4>
+<div class="tw"><table>
+<thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>model</code></td><td>string</td><td>Model id or alias, e.g. <code>llama1b</code></td></tr>
+<tr><td><code>messages</code></td><td>array</td><td>Standard <code>{role, content}</code> turns</td></tr>
+<tr><td><code>stream</code></td><td>boolean</td><td>SSE streaming when <code>true</code></td></tr>
+<tr><td><code>local</code></td><td>boolean</td><td><strong>PyrusLLM extension.</strong> Keep the request on this machine; never route to a peer or an external API</td></tr>
+<tr><td><code>node</code></td><td>string</td><td><strong>PyrusLLM extension.</strong> Pin one specific machine by id. No fallback if it is busy</td></tr>
+</tbody></table></div>
+
+<h4>Response headers</h4>
+<div class="tw"><table>
+<thead><tr><th>Header</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>X-Pyrus-Operator</code></td><td>Who answered (URI-encoded)</td></tr>
+<tr><td><code>X-Pyrus-Kind</code></td><td><code>real</code> · <code>peer</code> · <code>mock</code> · <code>upstream</code></td></tr>
+<tr><td><code>X-Pyrus-Scope</code></td><td><code>local</code> or <code>external</code> — whether the prompt left the network</td></tr>
+<tr><td><code>X-Pyrus-Model</code></td><td>The model that actually served it</td></tr>
+<tr><td><code>X-Pyrus-Cost-Estimate-Micros</code></td><td>The <strong>ceiling</strong> the spend was authorised against, in micro-dollars. Not the final cost: with SSE the headers go out before the first token.</td></tr>
+</tbody></table></div>
+
+<div class="note i"><b><code>X-Pyrus-Scope</code> is the field that matters for
+privacy.</b> <code>kind: upstream</code> does not by itself mean the prompt left your
+machine — a llama-server on localhost is also an upstream. <code>scope: external</code>
+is the one that says a third party saw it.</div>
+
+<h4>Example</h4>
+<pre><code>curl http://localhost:8787/v1/chat/completions \
+  -H <span class="c-st">"Authorization: Bearer $PYRUS_KEY"</span> \
+  -H <span class="c-st">"Content-Type: application/json"</span> \
+  -d <span class="c-st">'{
+        "model": "llama1b",
+        "messages": [{"role":"user","content":"hello"}],
+        "stream": true,
+        "local": false
+      }'</span></code></pre>
+
+<div class="note i">When streaming, a <strong>final SSE event</strong> may carry
+<code>paymentResponse</code> and <code>attestation</code> instead of a completion
+chunk — it has no <code>choices</code>. See
+<a href="api-economics.html#x402">the x402 flow</a>.</div>
+
+<h2 id="ep-models">List models</h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/models</span><span class="auth open">No key</span><a class="try" href="playground.html?ep=models">Try it &rarr;</a></div>
+<p>OpenAI-compatible catalog of every model the network announces.</p>
+<pre><code>{
+  <span class="c-kw">"object"</span>: <span class="c-st">"list"</span>,
+  <span class="c-kw">"data"</span>: [{ <span class="c-kw">"id"</span>: <span class="c-st">"llama1b"</span>, <span class="c-kw">"object"</span>: <span class="c-st">"model"</span>, <span class="c-kw">"owned_by"</span>: <span class="c-st">"pyrusllm"</span> }]
+}</code></pre>
+<div class="note i">Deliberately sanitised: it names the model, never the operator or
+the price. Those live behind <a href="api-network.html#ep-nodes">/v1/nodes</a>, which
+needs a key.</div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

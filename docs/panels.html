@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Browser panels — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/panels.html">
+
+<article id="doc">
+<div class="crumb">Documentation / Reference</div>
+<h1>Browser panels</h1>
+<p class="lede"><code>pyrusllm serve</code> also serves four pages. They are plain
+clients of the API documented in this site — same Bearer key, no privileged path.</p>
+
+<div class="tw"><table>
+<thead><tr><th>Route</th><th>Panel</th></tr></thead>
+<tbody>
+<tr><td><code>/</code></td><td><strong>Chat</strong> — ask the network; every answer names the machine that produced it</td></tr>
+<tr><td><code>/node</code></td><td><strong>My Node</strong> — your machine as a provider: status, load, rate, keys, traffic, meters</td></tr>
+<tr><td><code>/network</code></td><td><strong>Network</strong> — every node this machine knows about, and their files</td></tr>
+<tr><td><code>/wallet</code></td><td><strong>Wallet</strong> — address, balance, movements, send, network and token settings</td></tr>
+<tr><td><code>/admin</code></td><td><strong>Admin</strong> — all nodes plus the raw routing log</td></tr>
+</tbody></table></div>
+
+<div class="note i">The <a href="playground.html">API Playground</a> on this site is a
+fifth client of the same routes — it just talks to whichever node's Base URL you give
+it, instead of always <code>localhost</code>.</div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

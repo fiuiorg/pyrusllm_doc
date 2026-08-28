@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AERIA — Research — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/research-aeria.html">
+
+<article id="doc">
+<div class="crumb">Research / Paper notes</div>
+<h1>AERIA</h1>
+<p class="lede"><em>"Dynamic Pricing for On-Demand DNN Inference in the Edge-AI
+Market."</em> University of Exeter (Songyuan Li, Jia Hu, Geyong Min) + HUST + China
+University of Petroleum. arXiv 2503.04521v2, in review at IEEE Trans. Mobile
+Computing. <a href="../2503.04521v2.pdf">PDF</a>. Code:
+<code>github.com/songyuanli/AERIA</code>.</p>
+
+<p>A different genre from the first two: <strong>auction theory and mechanism
+design.</strong> It's the gap flagged in PolyLink's pricing — an undefined "market
+adjustment" coefficient δ — filled in with an entire formal mechanism.</p>
+
+<h2 id="what">What it proposes</h2>
+<p><strong>AERIA</strong> (Auction-based Edge infeRence prIcing mechAnism). Three
+actors:</p>
+<ul>
+<li><strong>AI users</strong> (bidders): submit <code>R_i = {β_i, t_i, σ_i, w_i}</code> — budget, latency requirement, accuracy requirement, which model.</li>
+<li><strong>AI service provider</strong> (auctioneer): decides the winners, how to partition the model, and the price.</li>
+<li><strong>Edge infrastructure provider</strong> (hardware owner): rents at <code>p^r_t</code>, which <strong>floats with the hourly electricity price</strong>.</li>
+</ul>
+<p>The technical piece underneath is a <strong>multi-exit DNN</strong>: intermediate
+classifier heads: if confidence at an early exit clears threshold σ_i, inference
+stops there. Shallow layers run on the user's device; deep layers offload to the
+edge.</p>
+
+<h2 id="mechanism">The mechanism</h2>
+<p><strong>Phase I</strong> — each user computes their minimum demand locally, in
+parallel, O(g):</p>
+<pre><code>ā_i,t = F^edge_i(s̄) / (t_i − T^dev_i − T^net_i)</code></pre>
+<p>The minimum edge FLOPS needed so the part that doesn't run locally finishes in the
+time budget remaining. Users are incentivized to ask for the minimum, because
+competition is by <strong>bidding density</strong> <code>d_i = β_i / ā_i,t</code> —
+budget per unit of resource.</p>
+<p><strong>Phase II</strong> — the <strong>COCO auction</strong>, three steps:</p>
+<ol>
+<li><strong>ROSO</strong> — omniscient single-price auction. Orders by density, fills capacity, computes <code>Π̃ = max_i d_[i]·Σ_{k≤i} ā_[k]</code>. The theoretical ceiling on revenue. Not truthful (needs perfect information); used only as a benchmark.</li>
+<li><strong>CENTRE</strong> — randomized consensus estimate: <code>f(ϖ) = y^(⌊log_y ϖ − ε⌋ + ε)</code>, ε uniform on [0,1], <code>δ = Φ̃/(Φ̃−ζ)</code>. The key property: the resulting revenue target is <strong>independent of the bids</strong> — lying about β_i can't move it. That's where incentive compatibility comes from. Guaranteed competitive ratio: <code>(1/ln y)(1/δ − 1/y)</code>.</li>
+<li><strong>REAL</strong> — Moulin-Shenker cost sharing. Iteratively drops bidders who fall below the provisional price <code>p' = Π̂/Φ̂</code>, recomputing, converging on a <strong>uniform price</strong> <code>p_t = Π̂/Φ̂</code> for everyone who wins. That's where envy-freeness comes from.</li>
+</ol>
+<p>Three proven properties: revenue-competitiveness, truthfulness, and fairness.</p>
+
+<h2 id="numbers">The numbers</h2>
+<div class="tw"><table>
+<tbody>
+<tr><td><strong>Full mechanism runtime</strong></td><td><strong>~3 ms</strong>, flat at any scale (i9-10920X)</td></tr>
+<tr><td>Complexity</td><td>O(N log N + C₂ + Ñ log Ñ)</td></tr>
+<tr><td>Revenue advantage vs. baselines</td><td>~60%</td></tr>
+<tr><td>Simulated scale</td><td>1,500 users (Shanghai Telecom trace), 39–112 bids per slot</td></tr>
+<tr><td>Billing slot τ</td><td>1 hour (Azure's minimum)</td></tr>
+<tr><td>Edge cluster</td><td>3,930 GFLOPS ≈ three i7-13700K, 450 W</td></tr>
+<tr><td>Real traces</td><td>Ontario hourly electricity prices (Sep 2022); Ghent 4G/LTE, 7–60 Mbps</td></tr>
+<tr><td>Multi-exit accuracy loss vs. full model</td><td>AlexNet −1.97%, ResNet34 −2.47%, VGG16 −3.77%</td></tr>
+<tr><td><strong>ME-BART vs. full BART</strong></td><td><strong>+1.10% (an improvement)</strong></td></tr>
+<tr><td>Samples exiting early (BART)</td><td><strong>18%–48%</strong>, depending on σ</td></tr>
+</tbody></table></div>
+
+<h2 id="conclusions">Conclusions</h2>
+<p><strong>1. The 3 ms figure is the number that changes the design.</strong> An
+auction over ~100 bids clears in 3 milliseconds of CPU. That means <strong>market
+clearing isn't the bottleneck — it fits inside an enclave without a second
+thought.</strong></p>
+<p>That's the pattern that answers PyrusLLM's own open question about a per-request
+enclave round trip — the hypothesis of "batching matches, precomputing assignments."
+This paper <strong>is</strong> that hypothesis, formalized: don't match per request,
+do <strong>clearing per window</strong> inside the enclave. One enclave invocation per
+window (they use 1 hour; PyrusLLM could use 1–10 seconds), N requests matched at once.
+Enclave overhead amortizes across every bid in the window instead of being paid N
+times over. That turns a stated risk into a problem with a published mechanism, proven
+properties, and open-source code.</p>
+
+<p><strong>2. This paper describes exactly why the market needs the enclave.</strong>
+Look at what the auctioneer has to see to function: every user's <strong>budget</strong>,
+<strong>latency requirement</strong>, <strong>accuracy requirement</strong>, and
+<strong>which model they want</strong>. That's a full participant profile. Not a side
+effect — it's the algorithm's required input.</p>
+<p>This is the most concrete validation of the underlying thesis, and the third
+independent one: PolyLink leaves matching on a cloud server, DeServe admits matching
+"remains centralized," and this paper <strong>details exactly what sensitive data
+that role necessarily accumulates.</strong> All three pieces of published state of
+the art leave open the hole PyrusLLM closes.</p>
+
+<p><strong>3. The auction prices patience, on its own.</strong> Since
+<code>d_i = β_i/ā_i,t</code> and <code>ā_i,t = F^edge/(t_i − T^dev − T^net)</code>, a
+more relaxed <code>t_i</code> shrinks the denominator → fewer resources requested →
+<strong>higher bidding density → wins more often, more cheaply.</strong></p>
+<p>Patient users win — exactly the online/batch split DeServe argues from a systems
+angle, except here it <strong>emerges from the pricing mechanism</strong> instead of
+being hardcoded. No need for two products with two fixed tariffs: the batch lane
+forms itself, and the market sets the discount instead of a hardcoded "−50% for 24h."</p>
+
+<p><strong>4. The same mechanism has a hole on the other axis.</strong> The same
+trick works on <code>σ_i</code>, and there it's a bug: <strong>declaring a looser
+accuracy requirement than you actually want raises your bidding density and makes you
+win more</strong> — and then you get a worse answer. Incentive compatibility is only
+proven over β_i (budget). <code>t_i</code> and <code>σ_i</code> are left uncovered,
+and Phase I literally tells the user to minimize <code>ā_i,t</code> to be more
+competitive. If PyrusLLM adopts this, that's the first manipulation to expect.</p>
+
+<p><strong>5. The uniform price is the most importable design decision.</strong> A
+single <code>p_t</code> for everyone, non-discriminatory. Formally it buys
+envy-freeness; practically it buys something more valuable: it's
+<strong>explainable</strong>. "Everyone paid the same this window, and this was the
+price" is a sentence a user understands and can audit. Against that, PolyLink has an
+undefined δ and DeServe uses a fixed Together.ai reference price.</p>
+
+<p><strong>6. The floating reserve price fits what's already known from DeServe.</strong>
+<code>p^res_t = (1+γ)·p^r_t / f_e</code>, tied to the hourly electricity price. From
+the DeServe analysis: the real marginal cost for an idle-hardware provider
+<em>is</em> electricity. So: a floor per provider, floating with their local
+electricity tariff, guaranteeing a minimum margin γ. Neither of the other two papers
+has a reserve price; without one, a provider can end up serving at a loss during a
+tariff spike. A small, necessary feature.</p>
+
+<p><strong>7. The "overthinking" finding is the one worth the most money.</strong>
+ME-BART came out <strong>1.10% more accurate</strong> than full BART — not less, more.
+The explanation: running every layer on easy samples overfits the inference. Between
+<strong>18% and 48%</strong> of samples finished early with acceptable quality.</p>
+<p>Translated to a business model: for a third to half of requests, <strong>running
+the big model is spending more and sometimes answering worse.</strong></p>
+
+<h2 id="critiques">Critiques</h2>
+<p><strong>It's on the wrong side of the market.</strong> The objective function (9)
+is <code>max Π(U_t)</code> — the service provider's revenue. The auctioneer is a
+seller extracting maximum surplus from users. A pitch built on "price is set by an
+open market instead of three corporations, the margin stays with whoever contributes
+the actual compute" is contradicted by importing AERIA as-is — that makes the
+platform the extractor.</p>
+<p>But there's a useful escape: <strong>the mechanism is objective-agnostic.</strong>
+Consensus estimate + cost sharing work identically maximizing social welfare, or the
+<em>compute provider's</em> revenue instead of the intermediary's. And here's the
+interesting part: if the auction runs in the enclave with published code,
+<strong>anyone can verify what it's actually maximizing.</strong> An auction whose
+objective is auditable is a different kind of economic object than one a company
+merely promises to run fairly.</p>
+
+<p><strong>It's one-sided, with homogeneous supply.</strong> There is <em>one</em>
+edge cluster with capacity <code>f_e</code>. Only users bid. PyrusLLM has many
+providers with different GPUs, different costs, different models and different
+reputations — that's a <strong>double auction</strong>, and by
+Myerson-Satterthwaite you cannot simultaneously have truthfulness, budget balance,
+and efficiency. AERIA sidesteps the whole problem. <strong>It's half an answer, not a
+drop-in.</strong></p>
+
+<p><strong>The cost model doesn't transfer to LLMs.</strong> This is the most
+important critique. All latency is modeled as <code>T = F/f</code> — FLOPs divided by
+FLOPS. That assumes <strong>a single forward pass</strong>. An autoregressive LLM is
+<em>r</em> sequential passes, with a KV cache, bound by <strong>memory bandwidth, not
+FLOPS</strong>. Its natural resource unit is "FLOPS allocated" and its price is
+"$/unit of FLOPS"; for LLMs the natural unit is <strong>tokens</strong> (and GPU
+memory for the KV cache).</p>
+<p>And the "LLM" in the paper is actually <strong>BART</strong> doing
+German→English translation on Multi30K — a 2019 encoder-decoder with a few hundred
+million parameters. Calling it "a representative large language model" is a stretch.
+Everything is simulated, no GPUs — the cluster is three CPUs.</p>
+<p><strong>Take the mechanism, not the units.</strong> No verification, no trust, no
+privacy, no reputation, no blockchain, zero real deployment.</p>
+
+<h2 id="takeaways">What to take to PyrusLLM</h2>
+<p><strong>1. Windowed clearing inside the enclave.</strong> The concrete pattern:
+accumulate bids over a short window, run a uniform-price auction inside the enclave,
+return assignments. One round trip per window, not per request. This is the answer
+to the open enclave-latency question, with a formal mechanism, proven properties, and
+a 3 ms cost — it stops being an open question and becomes a plan.</p>
+<p><strong>2. Uniform price per window + reserve price per provider.</strong> A
+single explainable, auditable, envy-free price per window; each provider declares
+its floor, tied to its electricity tariff. Cheap to implement, and neither PolyLink
+nor DeServe has either piece.</p>
+<p><strong>3. Cascade routing — the most profitable idea in the paper.</strong> The
+LLM equivalent of multi-exit isn't early-exit layers, it's <strong>model
+cascading</strong>: a small model on a cheap node first, a confidence check, escalate
+to the big model only if needed. The data supports it (18–48% resolved early, and
+sometimes <em>better</em>).</p>
+<p>Cross this with DeServe's number: 445 tok/s against a 1,139 tok/s break-even at
+rental prices. <strong>The cheapest way to serve a 70B model is to not run it for a
+third of requests.</strong> A well-tuned cascade moves the break-even point more than
+any kernel optimization — and it's product work, not research.</p>
+<p><strong>4. If adopting the auction, close the σ axis.</strong> Charge for what the
+user <em>asked for</em>, but measure what they <em>received</em> — reconnecting with
+PolyLink's TIQE: the in-enclave cross-encoder can verify whether the cascade's output
+actually met the declared σ. A user who loosens their requirement to win cheap and
+then complains needs to show up in the data.</p>
+<p><strong>5. Decide explicitly what the auction maximizes, and publish it.</strong> A
+product decision, not a technical one — it defines what kind of company PyrusLLM is.
+With the enclave, this is the first time that declaration can be
+<strong>verifiable</strong> instead of a promise.</p>
+
+<h2 id="map">Where the map stands</h2>
+<div class="tw"><table>
+<thead><tr><th></th><th>PolyLink</th><th>DeServe</th><th>AERIA</th></tr></thead>
+<tbody>
+<tr><td>Throughput / systems</td><td>weak</td><td><strong>strong</strong></td><td>n/a (simulated, CPU)</td></tr>
+<tr><td>Provider economics</td><td>inverted incentive</td><td><strong>real cost table</strong></td><td>floating reserve + margin γ</td></tr>
+<tr><td><strong>Price discovery</strong></td><td>undefined δ</td><td>fixed reference price</td><td><strong>proven auction</strong></td></tr>
+<tr><td>Quality / reputation</td><td><strong>TIQE, measured</strong></td><td>absent</td><td>σ as a requirement, unverified</td></tr>
+<tr><td>Verification</td><td>committee, 30% tax</td><td><strong>optimistic, ~0% tax</strong></td><td>absent</td></tr>
+<tr><td>Privacy</td><td>none</td><td>none</td><td>none — and defines the profile the auctioneer accumulates</td></tr>
+<tr><td>Decentralized matching</td><td>no</td><td>no (admitted)</td><td>no (it's the auctioneer, by design)</td></tr>
+<tr><td>Applies to autoregressive LLMs</td><td>yes</td><td><strong>yes</strong></td><td><strong>no — single-pass cost model</strong></td></tr>
+</tbody></table></div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

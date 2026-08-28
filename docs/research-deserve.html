@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeServe — Research — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/research-deserve.html">
+
+<article id="doc">
+<div class="crumb">Research / Paper notes</div>
+<h1>DeServe</h1>
+<p class="lede"><em>"DeServe: Towards Affordable Offline LLM Inference via
+Decentralization."</em> UC Berkeley — Dawn Song's group. arXiv 2501.14784v1, cs.DC,
+4 Jan 2025. <a href="../2501.14784v1.pdf">PDF</a>. A systems paper, not a crypto
+paper — read in full, and the single most useful paper of the four for PyrusLLM's
+architecture decisions.</p>
+
+<h2 id="thesis">The thesis, and it's a strategic pivot</h2>
+<p>DeServe starts from a concession PolyLink never makes: <strong>a decentralized
+network cannot win on latency. Full stop.</strong> So don't compete there — compete
+on <strong>offline serving</strong> (batch inference), where the metric is throughput
+and the user accepts waiting. The precedent they cite is OpenAI's batch API:
+<strong>a 50% discount in exchange for up to 24 hours of wait.</strong></p>
+<p>The entire paper follows from that one decision, and it's arguably the single most
+valuable idea across all four papers.</p>
+
+<h2 id="economics">The economics (Table 2) — the hardest number in the set</h2>
+<p>8 equivalent GPUs, reference price $0.90/1M tokens (Llama-70B via Together.ai):</p>
+<div class="tw"><table class="num">
+<thead><tr><th>Compute source</th><th>Cost ($/h)</th><th>Throughput to break even</th></tr></thead>
+<tbody>
+<tr><td>GCP 8× L4</td><td>13.88</td><td>4,283 tok/s</td></tr>
+<tr><td>RunPod 8×4090</td><td>5.52</td><td>1,704 tok/s</td></tr>
+<tr><td>io.net 8×4090</td><td>3.69</td><td>1,139 tok/s</td></tr>
+<tr><td><strong>Mining-rate</strong> 8×4090</td><td><strong>0.35</strong></td><td><strong>108 tok/s</strong></td></tr>
+</tbody></table></div>
+<p><strong>A 40x gap</strong> between cloud pricing and hardware valued at mining
+opportunity cost.</p>
+<p>Now cross that against what their own system achieves: <strong>445 tok/s.</strong>
+Run the numbers:</p>
+<ul>
+<li>Against mining rate (108) → <strong>4x margin. Closes.</strong></li>
+<li>Against io.net (1,139) → <strong>445 &lt; 1,139. Does not close.</strong></li>
+<li>Against cloud → nowhere close.</li>
+</ul>
+<p><strong>A conclusion the paper doesn't spell out, and matters a lot here:</strong>
+a decentralized 70B pipeline is <strong>only profitable if the hardware owner values
+their time at mining opportunity cost</strong> (~$0.044/GPU-hour), not at rental
+price. Follow the math: a 4090 costs ~$1,800; at $0.044/h that's a ~41,000-hour
+payback ≈ <strong>4.7 years</strong>. In other words: <strong>buying hardware to
+serve inference on this network never pays back.</strong></p>
+<p>That corrects the standard supply-side segmentation ("crypto node operators, server
+owners, and investors with the capacity to acquire hardware"). The math says the
+"investor who buys hardware" segment doesn't close — the one that closes is
+<strong>"already has the hardware, sitting idle,"</strong> where the marginal cost is
+electricity. Those are two different pitches, and only one of them is true.</p>
+
+<h2 id="technical">The technical core</h2>
+<p><strong>1. Inter-layer (pipeline) parallelism, not tensor parallelism.</strong>
+vLLM with TP <strong>failed outright</strong> between us-east and us-west — didn't
+even produce a number. TP exchanges tensors on every layer; over a WAN, that's dead.
+Pipeline only passes the activation between stages.</p>
+<p><strong>2. KV cache offloading.</strong> KV cache is offloaded to CPU RAM using
+two <em>global page pools</em> (G0/G1) in double buffering, overlapping the swap with
+compute over full-duplex PCIe. Memory per microbatch:</p>
+<pre><code>M'_B = (M_KV − 2·M_G)/N_B + M_G,  with M_G = W × T_S</code></pre>
+<p>The important part is the second term: it <strong>guarantees a memory floor per
+microbatch</strong>, no matter how many microbatches you pack in.</p>
+<p><strong>3. Microbatch scheduling.</strong> Network latency injects <em>bubbles</em>
+into the pipeline. They're filled by adding more microbatches: if latency is
+½·T_S across 4 stages, add 2 more microbatches.</p>
+<p><strong>The two techniques need each other.</strong> Without offloading, doubling
+microbatches halves each one's memory and the optimization cancels out. With the
+<code>M_G</code> floor in place, it scales.</p>
+
+<h2 id="results">Results (Table 4, output tok/s)</h2>
+<div class="tw"><table class="num">
+<thead><tr><th></th><th>centralized &lt;1ms</th><th>east–west 58.4ms</th><th>sim. 64ms</th><th>sim. 256ms</th></tr></thead>
+<tbody>
+<tr><td>vLLM (tensor parallel)</td><td>253.0</td><td><strong>failed</strong></td><td>/</td><td>/</td></tr>
+<tr><td>vLLM (pipeline)</td><td>89.1</td><td>37.3</td><td>36.1</td><td>/</td></tr>
+<tr><td>DeServe (pipeline)</td><td>194.6</td><td>138.4</td><td>133.7</td><td>/</td></tr>
+<tr><td><strong>DeServe (optimized)</strong></td><td><strong>445.2</strong></td><td><strong>434.1</strong></td><td><strong>456.8</strong></td><td><strong>442.9</strong></td></tr>
+</tbody></table></div>
+<p>The remarkable part isn't the 6.7x–12.6x headline from the abstract. It's that the
+<strong>last row is flat</strong>: 445 centralized → 434 at 58 ms → 443 at
+<strong>256 ms</strong>. Throughput <strong>independent of latency</strong>. With
+enough microbatches in flight, WAN latency disappears entirely — and it beats
+centralized vLLM with TP outright (445 vs 253).</p>
+<p><strong>The price of that is in Table 3:</strong> at batch 1, 66.6 ms per instance;
+at batch 256, 0.537 ms. Throughput comes from massive batches → hundreds of requests
+need to be in flight simultaneously. <strong>No single user gets a fast answer.</strong>
+Which is exactly why this only works offline.</p>
+
+<h2 id="correction">A correction to the prior sharding conclusion</h2>
+<p>The PolyLink notes say "don't build sharding, the evidence is damning." Needs
+refining: <strong>naive sharding is dead; well-pipelined sharding works, but only in
+batch mode.</strong> PolyLink does sequential sharding with no batching and gets
+7 tok/s on a 14B. DeServe does deep pipelining with KV offload and gets 445 tok/s on
+a 70B, cross-coast. The difference isn't the network — it's queue engineering. What
+no technique recovers is <strong>per-request latency</strong>.</p>
+
+<h2 id="verification">Section 6 — verification, and it beats TIQE</h2>
+<p>Three design principles, stated explicitly, that work as hard constraints:</p>
+<ol>
+<li><strong>Verification must not load heavy compute onto the provider.</strong> Rules out opML and spML (need deterministic floating-point arithmetic → slow down inference) and zkLLM (too expensive).</li>
+<li><strong>Input and output stay off-chain by default.</strong> The gas cost of storing results on-chain <strong>can exceed the cost of the inference itself.</strong> opML fails here.</li>
+<li><strong>The provider must not be forced to answer challenges from anyone</strong> → a DoS vector. opML fails here too.</li>
+</ol>
+<p>Their solution: <strong>optimistic.</strong> The miner <strong>signs</strong> the
+result; the honest path is 100% off-chain and costs the provider <strong>only a
+signature</strong>; the user can send the output to third parties for verification if
+they want; if fraud is detected, they invoke arbitration and <strong>take the
+stake</strong>. The arbitration module is explicitly pluggable.</p>
+<p><strong>Compare the cost to PolyLink:</strong> PolyLink pays a validator committee
+<strong>on every batch</strong> — β = 0.3, i.e. <strong>30% of all revenue</strong>
+leaves the provider's pocket permanently. DeServe pays <strong>zero</strong> on the
+happy path. A pitch built on "the margin stays with whoever contributes the actual
+compute" is directly contradicted by a permanent 30% validator tax.</p>
+
+<h2 id="open">What they admit (§6.3, Open Problems)</h2>
+<p>Verbatim: contract deployment and <strong>resource-to-task matching remain
+centralized</strong>. Fair task distribution is unexplored. And
+<strong>correctness-verification criteria are not well-defined.</strong></p>
+<p>Berkeley and PolyU — two independent groups — leave the <strong>same hole</strong>:
+the matching layer keeps an owner. Two independent confirmations of the same
+architectural gap.</p>
+<div class="note w">A design tension neither paper sees: DeServe presents as a
+<em>feature</em> that "the peer-to-peer communication for each task is always between
+the same pair of peers" — done to prevent DoS. That's exactly the linkability
+PyrusLLM's privacy layer wants to break. Anti-DoS and unlinkability pull in opposite
+directions, and reconciling them is a real open design problem.</div>
+
+<h2 id="takeaways">What to take to PyrusLLM</h2>
+<p><strong>1. A two-lane product.</strong> Today's design describes a single,
+interactive lane. Add the batch lane:</p>
+<div class="tw"><table>
+<thead><tr><th></th><th>Online lane</th><th>Batch lane</th></tr></thead>
+<tbody>
+<tr><td>SLA</td><td>seconds</td><td>hours</td></tr>
+<tr><td>Routing</td><td>1 node with the whole model</td><td>multi-node pipeline</td></tr>
+<tr><td>Metric</td><td>TTFT / latency</td><td>aggregate tok/s</td></tr>
+<tr><td>Price</td><td>premium</td><td>−50%</td></tr>
+<tr><td>Tolerates intermittent hardware</td><td>no</td><td><strong>yes</strong></td></tr>
+</tbody></table></div>
+<p>That last row is the one that matters most: idle hardware <em>is</em> intermittent,
+and batch is the only mode where that's not a liability.</p>
+
+<p><strong>2. Launch confidential matching in the batch lane first.</strong> The open
+question about a per-request enclave round trip disappears at batch scale: with an
+hours-long SLA, "300 ms of enclave overhead against a 24-hour budget" is statistical
+noise. That converts the main technical risk into a roadmap with its first step
+already solved.</p>
+
+<p><strong>3. Optimistic verification, with the enclave as arbiter.</strong> Adopt
+DeServe's scheme (provider signature, 100% off-chain honest path, stake, arbitration
+only on dispute) and resolve its expensive part with what's already there: <strong>the
+enclave is the arbiter.</strong> No opML-style bisection, no ZK needed — the TEE
+re-executes or adjudicates. DeServe leaves the arbitration module explicitly pluggable
+because it has nothing to fill it with. PyrusLLM does.</p>
+
+<p><strong>4. Sign outputs, not just the manifest.</strong> Today the node signs its
+manifest. Extend that to signing every result (hash of prompt + hash of output +
+model id + nonce). It's the only per-request cost of the optimistic scheme, and it's
+what makes any later arbitration possible. Cheap now, impossible to retrofit.</p>
+
+<p><strong>5. The three principles as a rejection filter.</strong> For any
+verification mechanism under consideration: does it load compute onto the provider?
+Does it put data on-chain? Does it let anyone challenge at will? A "yes" to any one
+disqualifies it. This filter alone eliminates zkLLM, opML, and spML.</p>
+
+<p><strong>6. KV offloading helps even on a single node.</strong>
+<code>M_G = W × T_S</code>. Consumer GPUs are memory-bound, not compute-bound.
+Offloading KV cache to RAM with overlap buys more batch size on a 4090 or an M3 —
+applies to the online lane too.</p>
+
+<p><strong>7. The engine already exists:</strong> <code>github.com/CoLearn-Dev/deserve</code>,
+PyTorch + FlashInfer. A starting point for the batch lane, not a from-scratch build.
+Caveat: January 2025 research code, likely unmaintained — verify before depending on
+it.</p>
+
+<h2 id="scoreboard">Where the two stand</h2>
+<div class="tw"><table>
+<thead><tr><th></th><th>PolyLink</th><th>DeServe</th></tr></thead>
+<tbody>
+<tr><td>Throughput / systems</td><td>naive, 7 tok/s</td><td><strong>strong, 445 tok/s</strong></td></tr>
+<tr><td>Provider economics</td><td>inverted-incentive formulas</td><td><strong>real cost table</strong></td></tr>
+<tr><td>Quality / reputation</td><td><strong>TIQE, measured</strong></td><td>absent</td></tr>
+<tr><td>Verification</td><td>permanent committee, 30% tax</td><td><strong>optimistic, ~0% tax</strong></td></tr>
+<tr><td>Privacy</td><td>none</td><td>none (linkability is a feature)</td></tr>
+<tr><td>Decentralized matching</td><td><strong>no</strong> (central API server)</td><td><strong>no</strong> (admitted)</td></tr>
+</tbody></table></div>
+<p>Nearly complementary — and the two blank cells in both columns, <strong>privacy
+and ownerless matching</strong>, are, quite literally, PyrusLLM's product.</p>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

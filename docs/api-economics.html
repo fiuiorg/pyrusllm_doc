@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API — Economics &amp; x402 — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/api-economics.html">
+
+<article id="doc">
+<div class="crumb">Documentation / API reference</div>
+<h1>Economics &amp; x402</h1>
+<p class="lede">What this node gives away, what it spends, what got paid, and how a
+402 turns into a settled request.</p>
+
+<h2 id="ep-quota">Free-tier quota</h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/quota</span><span class="auth">Bearer</span><a class="try" href="playground.html?ep=quota">Try it &rarr;</a></div>
+<p>What this node <strong>gives away</strong>: <code>given_tokens</code>,
+<code>quota_tokens</code> per peer, <code>window_hours</code> (a sliding window, so it
+tops back up), and per-peer usage. Enforced here, by the machine paying the
+electricity — not by whoever is asking.</p>
+
+<h2 id="ep-budget">Spend cap</h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/budget</span><span class="auth">Bearer</span><a class="try" href="playground.html?ep=budget">Try it &rarr;</a></div>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/budget/report</span><span class="auth">Bearer</span><a class="try" href="playground.html?ep=budgetreport">Try it &rarr;</a></div>
+<p>What this node <strong>spends</strong> on external APIs. Local inference is in
+neither meter — it costs nobody anything but your electricity.</p>
+<div class="note i"><b>There are two caps</b> and either can be the one that cuts: a
+per-client cap and a per-machine total. Show the <strong>smaller</strong> remainder —
+with the account at USD 20 and the node at USD 2, saying "you have 20 left" promises
+nineteen that do not exist.</div>
+
+<h2 id="ep-receipts">Look up a receipt</h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/receipts/:id</span><span class="auth open">No key</span><a class="try" href="playground.html?ep=receipts">Try it &rarr;</a></div>
+<p>Takes the completion id (<code>chatcmpl-…</code>) that came back with the answer,
+and returns the settlement receipt plus the attestation.</p>
+<div class="note w">Receipts live in <strong>process memory</strong> and only the last
+200 are kept. This is not a ledger — the real ledger is the chain. A restart wipes
+them. There is deliberately no route that <em>lists</em> receipts.</div>
+
+<h2 id="x402">The x402 payment flow</h2>
+<p>A request to a node with a wallet, without a valid credential, gets a
+<code>402</code> whose body is not an error string but a <strong>quote</strong>: how
+much, to whom, on which network, and up to how many tokens.</p>
+<pre><code><span class="c-cm">// 402 response</span>
+{ <span class="c-kw">"accepts"</span>: [{ <span class="c-kw">"scheme"</span>: …, <span class="c-kw">"network"</span>: …, <span class="c-kw">"payTo"</span>: …, <span class="c-kw">"maxAmountRequired"</span>: … }] }</code></pre>
+<p>After paying, the answer streams back and a <strong>final SSE event</strong> carries
+the proof:</p>
+<div class="tw"><table>
+<thead><tr><th>Field</th><th>What it proves</th></tr></thead>
+<tbody>
+<tr><td><code>paymentResponse</code></td><td>Somebody paid — the settlement receipt</td></tr>
+<tr><td><code>attestation</code></td><td>What this node served, signed with the payout wallet over the JCS form of everything except the signature</td></tr>
+<tr><td><code>attestationMissing</code></td><td>Present instead, with the reason, when no attestation could be produced</td></tr>
+</tbody></table></div>
+<div class="note g"><b>Verify it yourself.</b> The attestation's <code>outputHash</code>
+is over the <strong>text</strong>, not the chunking — so a provider that inflates the
+gateway's chunk count by chopping the stream finer cannot move it. Recompute it
+against the answer you actually received.</div>
+<div class="note b">A <code>402</code> <em>without</em> an <code>accepts</code> array is
+a different thing entirely: your spend cap is exhausted. There is nothing to pay — a
+limit was hit.</div>
+
+<div class="note i">This flow is also the design opening discussed in
+<a href="research-decisions.html#d1">Research → D1: what's the economy denominated
+in?</a> — x402 is a rail built for stablecoin settlement.</div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

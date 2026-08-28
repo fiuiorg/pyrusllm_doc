@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API — Keys — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/api-keys.html">
+
+<article id="doc">
+<div class="crumb">Documentation / API reference</div>
+<h1>API keys</h1>
+<p class="lede">Create, list and revoke the Bearer keys clients use.</p>
+
+<h2 id="ep-keys">List keys</h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/keys</span><span class="auth">Bearer</span><a class="try" href="playground.html?ep=keys">Try it &rarr;</a></div>
+<p>Returns <code>{ keys: [{ id, label, key, lastUsedAt }] }</code>.</p>
+
+<h2 id="ep-keys-new">Create a key</h2>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/keys</span><span class="auth">Bearer</span><a class="try" href="playground.html?ep=keysnew">Try it &rarr;</a></div>
+<pre><code>curl -X POST http://localhost:8787/v1/keys \
+  -H <span class="c-st">"Authorization: Bearer $PYRUS_KEY"</span> \
+  -H <span class="c-st">"Content-Type: application/json"</span> \
+  -d <span class="c-st">'{"label":"telegram bot"}'</span></code></pre>
+
+<h2 id="ep-keys-del">Revoke keys</h2>
+<div class="ep"><span class="v m del">DELETE</span><span class="p">/v1/keys/:id</span><span class="auth">Bearer</span></div>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/keys/revoke-all</span><span class="auth">Bearer</span></div>
+<p>Revocation takes effect immediately — whatever is using the key stops working.</p>
+<div class="note w"><code>revoke-all</code> kills the browser panel's own key too. The
+panel re-credentials itself automatically; a script would need to fetch a new key.</div>
+<div class="note w">Both revocation routes are <code>curl</code>-only in the
+playground: they cut off access, including possibly your own session. See
+<a href="playground-safety.html">what the playground restricts</a>.</div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

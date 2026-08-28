@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Playground — PyrusLLM Docs</title>
+<meta name="description" content="Fire real requests against your own PyrusLLM node — k16 or any machine you run — straight from the browser.">
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/playground.html">
+
+<article id="doc">
+<div class="crumb">API Playground</div>
+<h1>API Playground</h1>
+<p class="lede">Point this at a running <code>pyrusllm serve</code> — your own
+machine, or a node like <strong>k16</strong> reachable on your network — and call its
+API for real, from this page.</p>
+
+<div class="note w">
+<b>Read-only and low-risk routes execute live.</b> Anything that revokes a key, moves
+funds, changes what network the node talks to, or writes a file only ever produces a
+<code>curl</code> command here — you run it yourself, where you can read it first. See
+<a href="playground-safety.html">exactly what is restricted and why</a>.
+</div>
+
+<h2 id="connection">Connection</h2>
+<div class="pg-conn">
+  <div class="pg-grid">
+    <label class="fld"><span>Base URL</span>
+      <input id="pg-base" type="text" placeholder="http://localhost:8787" autocomplete="off" spellcheck="false">
+    </label>
+    <label class="fld"><span>API key <span style="font-weight:400;text-transform:none;color:var(--tx3)">(Bearer, optional for no-key routes)</span></span>
+      <input id="pg-key" type="password" placeholder="pk_live_…" autocomplete="off" spellcheck="false">
+    </label>
+  </div>
+  <div class="row">
+    <button class="btn ghost" id="pg-save" type="button">Save to this browser</button>
+    <button class="btn ghost" id="pg-clear" type="button">Clear</button>
+    <span class="status" id="pg-conn-status"></span>
+  </div>
+  <div class="note i" style="margin:.85rem 0 0">Saved only in this browser's
+  <code>localStorage</code>, on this device. Never sent anywhere except the Base URL
+  you set. If a live request fails with a network error, your node's gateway most
+  likely needs to allow this page's origin — see
+  <a href="playground-safety.html#cors">CORS</a>.</div>
+</div>
+
+<h2 id="console">Console</h2>
+<div class="pg-conn">
+  <div class="pg-grid">
+    <label class="fld"><span>Endpoint</span>
+      <select id="pg-ep"></select>
+    </label>
+    <div class="fld"><span>Method &amp; auth</span>
+      <div class="row" id="pg-meta" style="margin-top:.15rem"></div>
+    </div>
+  </div>
+
+  <div id="pg-params"></div>
+
+  <label class="fld" id="pg-body-wrap" style="margin-top:.7rem">
+    <span>Request body (JSON)</span>
+    <textarea id="pg-body" spellcheck="false"></textarea>
+  </label>
+
+  <div class="row">
+    <button class="btn" id="pg-send" type="button">Send request</button>
+    <button class="btn ghost" id="pg-curl" type="button">Copy as curl</button>
+    <span class="status" id="pg-status"></span>
+  </div>
+
+  <div class="out" id="pg-out"></div>
+</div>
+
+<div class="note i" style="margin-top:1.4rem">Every field here maps to a documented
+route. See <a href="api-inference.html">Inference</a>,
+<a href="api-network.html">Network</a>, <a href="api-keys.html">Keys</a>,
+<a href="api-economics.html">Economics</a>, <a href="api-wallet.html">Wallet</a> and
+<a href="api-files.html">Files &amp; upstream</a> for the full description of each
+one.</div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+<script>
+(function () {
+  'use strict'
+
+  // Endpoint registry. `live: true` executes for real; `live: false` only ever
+  // renders a curl command — see docs/playground-safety.html for the policy.
+  var EPS = [
+    { id: 'models',        m: 'GET',    p: '/v1/models',               auth: false, live: true,  cat: 'Inference', doc: '../docs/api-inference.html#ep-models' },
+    { id: 'chat',          m: 'POST',   p: '/v1/chat/completions',      auth: true,  live: true,  cat: 'Inference', doc: '../docs/api-inference.html#ep-chat',
+      body: { model: 'llama1b', messages: [{ role: 'user', content: 'hello' }], stream: false, local: false } },
+
+    { id: 'nodes',         m: 'GET',    p: '/v1/nodes',                 auth: true,  live: true,  cat: 'Network', doc: '../docs/api-network.html#ep-nodes' },
+    { id: 'agent',         m: 'GET',    p: '/v1/agent',                 auth: false, live: true,  cat: 'Network', doc: '../docs/api-network.html#ep-agent' },
+    { id: 'launch',        m: 'POST',   p: '/v1/agent/launch',          auth: true,  live: false, cat: 'Network', doc: '../docs/api-network.html#ep-launch', body: {} },
+    { id: 'manifest',      m: 'GET',    p: '/v1/swarm/manifest',        auth: true,  live: true,  cat: 'Network', doc: '../docs/api-network.html#ep-manifest' },
+    { id: 'manifestset',   m: 'POST',   p: '/v1/swarm/manifest',        auth: true,  live: false, cat: 'Network', doc: '../docs/api-network.html#ep-manifest',
+      body: { displayName: 'my node', tags: ['gpu'], maxConcurrentRequests: 4 } },
+    { id: 'routinglog',    m: 'GET',    p: '/v1/routing-log',           auth: true,  live: true,  cat: 'Network', doc: '../docs/api-network.html#ep-log' },
+
+    { id: 'keys',          m: 'GET',    p: '/v1/keys',                  auth: true,  live: true,  cat: 'Keys', doc: '../docs/api-keys.html#ep-keys' },
+    { id: 'keysnew',       m: 'POST',   p: '/v1/keys',                  auth: true,  live: true,  cat: 'Keys', doc: '../docs/api-keys.html#ep-keys-new', body: { label: 'playground key' } },
+    { id: 'keysdel',       m: 'DELETE', p: '/v1/keys/:id',              auth: true,  live: false, cat: 'Keys', doc: '../docs/api-keys.html#ep-keys-del', params: ['id'] },
+    { id: 'keysrevokeall', m: 'POST',   p: '/v1/keys/revoke-all',       auth: true,  live: false, cat: 'Keys', doc: '../docs/api-keys.html#ep-keys-del', body: {} },
+
+    { id: 'quota',         m: 'GET',    p: '/v1/quota',                 auth: true,  live: true,  cat: 'Economics', doc: '../docs/api-economics.html#ep-quota' },
+    { id: 'budget',        m: 'GET',    p: '/v1/budget',                auth: true,  live: true,  cat: 'Economics', doc: '../docs/api-economics.html#ep-budget' },
+    { id: 'budgetreport',  m: 'GET',    p: '/v1/budget/report',         auth: true,  live: true,  cat: 'Economics', doc: '../docs/api-economics.html#ep-budget' },
+    { id: 'receipts',      m: 'GET',    p: '/v1/receipts/:id',          auth: false, live: true,  cat: 'Economics', doc: '../docs/api-economics.html#ep-receipts', params: ['id'] },
+
+    { id: 'wallet',        m: 'GET',    p: '/v1/wallet',                auth: true,  live: true,  cat: 'Wallet', doc: '../docs/api-wallet.html#ep-wallet' },
+    { id: 'balances',      m: 'GET',    p: '/v1/wallet/balances',       auth: true,  live: true,  cat: 'Wallet', doc: '../docs/api-wallet.html#ep-balances' },
+    { id: 'history',       m: 'GET',    p: '/v1/wallet/history',        auth: true,  live: true,  cat: 'Wallet', doc: '../docs/api-wallet.html#ep-balances' },
+    { id: 'sendquote',     m: 'POST',   p: '/v1/wallet/send/quote',     auth: true,  live: false, cat: 'Wallet', doc: '../docs/api-wallet.html#ep-send', body: { to: '0x…', amount: '1.0', asset: 'native' } },
+    { id: 'send',          m: 'POST',   p: '/v1/wallet/send',           auth: true,  live: false, cat: 'Wallet', doc: '../docs/api-wallet.html#ep-send', body: { to: '0x…', amount: '1.0', asset: 'native', confirmar: 'MAINNET' } },
+    { id: 'walletcreate',  m: 'POST',   p: '/v1/wallet/create',         auth: true,  live: false, cat: 'Wallet', doc: '../docs/api-wallet.html#ep-wallet-rest', body: {} },
+    { id: 'walletnetwork', m: 'POST',   p: '/v1/wallet/network',        auth: true,  live: false, cat: 'Wallet', doc: '../docs/api-wallet.html#ep-wallet-rest', body: { network: 'testnet' } },
+    { id: 'wallettoken',   m: 'POST',   p: '/v1/wallet/tokens',         auth: true,  live: false, cat: 'Wallet', doc: '../docs/api-wallet.html#ep-wallet-rest', body: { address: '0x…', symbol: 'USDC', decimals: 6 } },
+    { id: 'wallettokendel',m: 'DELETE', p: '/v1/wallet/tokens',         auth: true,  live: false, cat: 'Wallet', doc: '../docs/api-wallet.html#ep-wallet-rest', body: { address: '0x…' } },
+
+    { id: 'files',         m: 'GET',    p: '/v1/files',                 auth: true,  live: true,  cat: 'Files & upstream', doc: '../docs/api-files.html#ep-files' },
+    { id: 'upload',        m: 'POST',   p: '/v1/files/upload?name=example.txt', auth: true, live: false, cat: 'Files & upstream', doc: '../docs/api-files.html#ep-upload', note: 'Body is the raw file bytes, not JSON.' },
+    { id: 'fetchfile',     m: 'POST',   p: '/v1/files/fetch',           auth: true,  live: false, cat: 'Files & upstream', doc: '../docs/api-files.html#ep-upload', body: { link: 'qvac://…' } },
+    { id: 'upstream',      m: 'GET',    p: '/v1/upstream',              auth: true,  live: true,  cat: 'Files & upstream', doc: '../docs/api-files.html#ep-upstream' },
+    { id: 'optin',         m: 'POST',   p: '/v1/upstream/opt-in',       auth: true,  live: false, cat: 'Files & upstream', doc: '../docs/api-files.html#ep-optin', body: { enabled: true } }
+  ]
+
+  var BASE_KEY = 'pyrusdocs.baseurl'
+  var API_KEY = 'pyrusdocs.apikey'
+  var DEFAULT_BASE = 'http://localhost:8787'
+
+  var $base = document.getElementById('pg-base')
+  var $key = document.getElementById('pg-key')
+  var $connStatus = document.getElementById('pg-conn-status')
+  var $ep = document.getElementById('pg-ep')
+  var $meta = document.getElementById('pg-meta')
+  var $params = document.getElementById('pg-params')
+  var $bodyWrap = document.getElementById('pg-body-wrap')
+  var $body = document.getElementById('pg-body')
+  var $send = document.getElementById('pg-send')
+  var $curl = document.getElementById('pg-curl')
+  var $status = document.getElementById('pg-status')
+  var $out = document.getElementById('pg-out')
+
+  function loadConn () {
+    var b, k
+    try { b = localStorage.getItem(BASE_KEY); k = localStorage.getItem(API_KEY) } catch (e) {}
+    $base.value = b || DEFAULT_BASE
+    $key.value = k || ''
+  }
+  function saveConn () {
+    try {
+      localStorage.setItem(BASE_KEY, $base.value.trim() || DEFAULT_BASE)
+      localStorage.setItem(API_KEY, $key.value.trim())
+    } catch (e) {}
+    $connStatus.textContent = 'Saved.'
+    setTimeout(function () { $connStatus.textContent = '' }, 1800)
+  }
+  document.getElementById('pg-save').addEventListener('click', saveConn)
+  document.getElementById('pg-clear').addEventListener('click', function () {
+    $base.value = DEFAULT_BASE; $key.value = ''
+    try { localStorage.removeItem(BASE_KEY); localStorage.removeItem(API_KEY) } catch (e) {}
+    $connStatus.textContent = 'Cleared.'
+    setTimeout(function () { $connStatus.textContent = '' }, 1800)
+  })
+  loadConn()
+
+  // ------------------------------------------------------------- endpoint UI
+  var byCat = {}
+  EPS.forEach(function (e) { (byCat[e.cat] = byCat[e.cat] || []).push(e) })
+  Object.keys(byCat).forEach(function (cat) {
+    var og = document.createElement('optgroup')
+    og.label = cat
+    byCat[cat].forEach(function (e) {
+      var o = document.createElement('option')
+      o.value = e.id
+      o.textContent = e.m + '  ' + e.p.split('?')[0]
+      og.appendChild(o)
+    })
+    $ep.appendChild(og)
+  })
+
+  function find (id) { for (var i = 0; i < EPS.length; i++) if (EPS[i].id === id) return EPS[i]; return EPS[0] }
+
+  function render () {
+    var e = find($ep.value)
+    $meta.innerHTML =
+      '<span class="m ' + (e.m === 'GET' ? 'get' : e.m === 'DELETE' ? 'del' : 'post') + '">' + e.m + '</span>' +
+      '<span class="status">' + (e.auth ? 'Bearer key required' : 'No key required') + '</span>' +
+      (e.live ? '' : '<span class="locked">&#128274; curl only</span>') +
+      ' <a href="' + e.doc + '" style="font-size:.78rem">docs &rarr;</a>'
+
+    $params.innerHTML = ''
+    ;(e.params || []).forEach(function (name) {
+      var wrap = document.createElement('label')
+      wrap.className = 'fld'
+      wrap.style.marginTop = '.7rem'
+      wrap.innerHTML = '<span>Path parameter: ' + name + '</span>'
+      var input = document.createElement('input')
+      input.type = 'text'
+      input.dataset.param = name
+      input.placeholder = name === 'id' ? 'e.g. chatcmpl-… or a key id' : name
+      wrap.appendChild(input)
+      $params.appendChild(wrap)
+    })
+
+    if (e.body !== undefined) {
+      $bodyWrap.hidden = false
+      $body.value = JSON.stringify(e.body, null, 2)
+    } else {
+      $bodyWrap.hidden = true
+      $body.value = ''
+    }
+    if (e.note) {
+      var n = document.createElement('div')
+      n.className = 'note i'
+      n.style.marginTop = '.7rem'
+      n.textContent = e.note
+      $params.appendChild(n)
+    }
+
+    $send.disabled = !e.live
+    $send.textContent = e.live ? 'Send request' : 'Live send disabled — this route is restricted'
+    $out.textContent = ''
+    $status.textContent = ''
+    $status.className = 'status'
+  }
+  $ep.addEventListener('change', render)
+
+  function resolvedPath (e) {
+    var p = e.p
+    ;(e.params || []).forEach(function (name) {
+      var input = $params.querySelector('input[data-param="' + name + '"]')
+      var v = input ? input.value.trim() : ''
+      p = p.replace(':' + name, encodeURIComponent(v || (':' + name)))
+    })
+    return p
+  }
+
+  function buildRequest () {
+    var e = find($ep.value)
+    var base = ($base.value || DEFAULT_BASE).trim().replace(/\/+$/, '')
+    var path = resolvedPath(e)
+    var url = base + path
+    var headers = {}
+    if (e.auth && $key.value.trim()) headers.Authorization = 'Bearer ' + $key.value.trim()
+    var bodyText = null
+    if (e.body !== undefined && !$bodyWrap.hidden) {
+      bodyText = $body.value
+      headers['Content-Type'] = 'application/json'
+    }
+    return { e: e, url: url, headers: headers, bodyText: bodyText }
+  }
+
+  function toCurl (r) {
+    var parts = ['curl', JSON.stringify(r.url)]
+    if (r.e.m !== 'GET') parts.splice(1, 0, '-X ' + r.e.m)
+    Object.keys(r.headers).forEach(function (h) {
+      parts.push('-H ' + JSON.stringify(h + ': ' + r.headers[h]))
+    })
+    if (r.bodyText != null && r.bodyText.trim()) {
+      parts.push('-d ' + JSON.stringify(r.bodyText))
+    }
+    return parts.join(' \\\n  ')
+  }
+
+  $curl.addEventListener('click', function () {
+    var r = buildRequest()
+    var txt = toCurl(r)
+    var done = function () { $status.textContent = 'curl copied to clipboard.'; $status.className = 'status ok' }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(done, function () { $out.textContent = txt })
+    } else {
+      $out.textContent = txt
+    }
+  })
+
+  $send.addEventListener('click', function () {
+    var r = buildRequest()
+    if (!r.e.live) return
+    $status.textContent = 'Sending…'
+    $status.className = 'status'
+    $out.textContent = ''
+    var opts = { method: r.e.m, headers: r.headers }
+    if (r.bodyText != null) {
+      try { JSON.parse(r.bodyText) } catch (err) {
+        $status.textContent = 'Body is not valid JSON.'
+        $status.className = 'status err'
+        return
+      }
+      opts.body = r.bodyText
+    }
+    var t0 = performance.now()
+    fetch(r.url, opts).then(function (res) {
+      var dt = Math.round(performance.now() - t0)
+      var okClass = res.ok ? 'ok' : 'err'
+      $status.textContent = res.status + ' ' + res.statusText + ' · ' + dt + ' ms'
+      $status.className = 'status ' + okClass
+      var ctype = res.headers.get('content-type') || ''
+      if (ctype.indexOf('text/event-stream') !== -1) {
+        return res.text().then(function (t) { $out.textContent = t })
+      }
+      return res.text().then(function (t) {
+        try { $out.textContent = JSON.stringify(JSON.parse(t), null, 2) }
+        catch (e) { $out.textContent = t }
+      })
+    }).catch(function (err) {
+      $status.textContent = 'Network error'
+      $status.className = 'status err'
+      $out.textContent = String(err) +
+        '\n\nThis is almost always CORS or an unreachable Base URL — see ' +
+        '../docs/playground-safety.html#cors for how to fix it on the node side.'
+    })
+  })
+
+  // Preselect from ?ep=xxx (used by "Try it" links across the docs).
+  var qs = new URLSearchParams(location.search)
+  var wanted = qs.get('ep')
+  if (wanted && EPS.some(function (e) { return e.id === wanted })) $ep.value = wanted
+  render()
+})()
+</script>
+</body>
+</html>

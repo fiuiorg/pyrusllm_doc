@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyrusLLM Docs</title>
+<style>
+  :root{
+    --bg:#0b0d12; --panel:#12151c; --panel2:#171a21; --line:#242a37; --line2:#1b1f27;
+    --tx:#e8ecf6; --tx2:#a9b4cc; --tx3:#7c8699;
+    --accent:#5fa8ff; --accent2:#4a7dfc;
+    --good:#4ade80; --goodbg:#12291c; --goodln:#1f4a31;
+    --warn:#fbbf24; --warnbg:#2a2413; --warnln:#4a3d18;
+    --bad:#f87171;  --badbg:#2d1618;  --badln:#542125;
+    --code:#0d1017;
+    --sidebar:270px;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#ffffff; --panel:#f7f8fa; --panel2:#f1f3f7; --line:#e2e6ee; --line2:#eef1f6;
+      --tx:#12151c; --tx2:#4a5468; --tx3:#6b7488;
+      --accent:#1f6feb; --accent2:#1f6feb;
+      --good:#136c39; --goodbg:#e8f7ee; --goodln:#b7e4c7;
+      --warn:#8a5a00; --warnbg:#fdf4e0; --warnln:#f0d9a8;
+      --bad:#b42318;  --badbg:#fdeceb;  --badln:#f5c2be;
+      --code:#f5f7fa;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#ffffff; --panel:#f7f8fa; --panel2:#f1f3f7; --line:#e2e6ee; --line2:#eef1f6;
+    --tx:#12151c; --tx2:#4a5468; --tx3:#6b7488;
+    --accent:#1f6feb; --accent2:#1f6feb;
+    --good:#136c39; --goodbg:#e8f7ee; --goodln:#b7e4c7;
+    --warn:#8a5a00; --warnbg:#fdf4e0; --warnln:#f0d9a8;
+    --bad:#b42318;  --badbg:#fdeceb;  --badln:#f5c2be;
+    --code:#f5f7fa;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth; scroll-padding-top:1.5rem}
+  body{
+    margin:0; background:var(--bg); color:var(--tx);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    font-size:15px; line-height:1.65;
+  }
+  code,pre,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+  /* ---------------------------------------------------------------- shell */
+  .wrap{display:flex; min-height:100vh; max-width:1500px; margin:0 auto}
+  aside{
+    width:var(--sidebar); flex:none; border-right:1px solid var(--line);
+    position:sticky; top:0; height:100vh; overflow-y:auto; padding:1.4rem 0 3rem;
+    background:var(--bg);
+  }
+  main{flex:1; min-width:0; padding:2.2rem 3rem 6rem; max-width:900px}
+  @media(max-width:1000px){
+    aside{position:fixed; left:0; top:0; z-index:60; transform:translateX(-100%);
+      transition:transform .18s ease; box-shadow:0 0 40px rgba(0,0,0,.45)}
+    aside.open{transform:none}
+    main{padding:1.4rem 1.15rem 5rem}
+    .wrap{display:block}
+  }
+
+  /* --------------------------------------------------------------- brand */
+  .brand{display:flex; align-items:center; gap:.6rem; padding:0 1.3rem 1.1rem;
+    border-bottom:1px solid var(--line2); margin-bottom:.9rem}
+  .brand .mark{
+    width:1.9rem;height:1.9rem;border-radius:7px;flex:none;
+    background:linear-gradient(140deg,var(--accent),#a06cff);
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;font-weight:800;font-size:.82rem;letter-spacing:-.03em
+  }
+  .brand b{font-size:1rem; letter-spacing:-.01em}
+  .brand .ver{
+    font-size:.66rem; color:var(--tx3); border:1px solid var(--line);
+    padding:.05rem .38rem; border-radius:999px; margin-left:auto
+  }
+
+  /* ------------------------------------------------------------- sidenav */
+  nav .grp{
+    font-size:.68rem; text-transform:uppercase; letter-spacing:.09em;
+    color:var(--tx3); padding:1.1rem 1.4rem .35rem; font-weight:700
+  }
+  nav a{
+    display:block; padding:.32rem 1.4rem; color:var(--tx2);
+    text-decoration:none; font-size:.86rem; border-left:2px solid transparent
+  }
+  nav a:hover{color:var(--tx); background:var(--panel2)}
+  nav a.on{color:var(--accent); border-left-color:var(--accent); background:var(--panel2)}
+  nav a .m{
+    font-size:.6rem; font-weight:700; padding:.02rem .3rem; border-radius:3px;
+    margin-right:.4rem; vertical-align:1px; font-family:ui-monospace,monospace
+  }
+  .m.get{background:#12291c;color:#4ade80}
+  .m.post{background:#1a2740;color:#7db8ff}
+  .m.del{background:#2d1618;color:#f87171}
+  :root[data-theme="light"] .m.get,
+  :root:not([data-theme="dark"]) .m.get{background:#e8f7ee;color:#136c39}
+  :root[data-theme="light"] .m.post,
+  :root:not([data-theme="dark"]) .m.post{background:#e7f0fd;color:#1f6feb}
+  :root[data-theme="light"] .m.del,
+  :root:not([data-theme="dark"]) .m.del{background:#fdeceb;color:#b42318}
+
+  /* -------------------------------------------------------------- topbar */
+  .top{display:none}
+  @media(max-width:1000px){
+    .top{display:flex; align-items:center; gap:.7rem; padding:.7rem 1.15rem;
+      border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:50}
+    .top button{
+      background:var(--panel2); color:var(--tx); border:1px solid var(--line);
+      border-radius:7px; padding:.35rem .6rem; font-size:.9rem; cursor:pointer}
+  }
+  .scrim{display:none}
+  .scrim.on{display:block; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:55}
+
+  /* ------------------------------------------------------------ typography */
+  h1{font-size:2.05rem; line-height:1.2; letter-spacing:-.025em; margin:.2rem 0 .5rem}
+  h2{font-size:1.32rem; letter-spacing:-.015em; margin:2.8rem 0 .5rem;
+     padding-top:1.1rem; border-top:1px solid var(--line2)}
+  h2:first-of-type{border-top:0; padding-top:0}
+  h3{font-size:1.02rem; margin:1.7rem 0 .4rem; letter-spacing:-.01em}
+  h4{font-size:.9rem; margin:1.2rem 0 .35rem; color:var(--tx2)}
+  p{margin:.6rem 0}
+  .lede{font-size:1.06rem; color:var(--tx2); margin-bottom:1.4rem}
+  a{color:var(--accent)}
+  ul,ol{padding-left:1.25rem; margin:.6rem 0}
+  li{margin:.22rem 0}
+  hr{border:0;border-top:1px solid var(--line2);margin:2rem 0}
+  strong{color:var(--tx)}
+
+  p code,li code,td code,h3 code,h4 code{
+    background:var(--panel2); border:1px solid var(--line);
+    border-radius:4px; padding:.06rem .32rem; font-size:.85em
+  }
+
+  /* ---------------------------------------------------------------- code */
+  pre{
+    background:var(--code); border:1px solid var(--line); border-radius:9px;
+    padding:.85rem 1rem; overflow-x:auto; margin:.7rem 0;
+    font-size:.805rem; line-height:1.6
+  }
+  pre code{background:none;border:0;padding:0;font-size:inherit}
+  .c-cm{color:var(--tx3)}
+  .c-fl{color:#c7a9ff}
+  .c-st{color:#86efac}
+  .c-kw{color:#7db8ff}
+  :root[data-theme="light"] .c-fl,:root:not([data-theme="dark"]) .c-fl{color:#7b3fd4}
+  :root[data-theme="light"] .c-st,:root:not([data-theme="dark"]) .c-st{color:#136c39}
+  :root[data-theme="light"] .c-kw,:root:not([data-theme="dark"]) .c-kw{color:#1f6feb}
+
+  /* --------------------------------------------------------------- cards */
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+    gap:.85rem; margin:1.2rem 0}
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:11px;
+    padding:1rem 1.05rem
+  }
+  .card .ico{font-size:1.15rem; margin-bottom:.35rem}
+  .card b{display:block; margin-bottom:.2rem; font-size:.95rem}
+  .card p{margin:0; font-size:.85rem; color:var(--tx2); line-height:1.55}
+  .card.link{text-decoration:none; color:inherit; display:block; transition:border-color .13s}
+  .card.link:hover{border-color:var(--accent)}
+
+  /* ------------------------------------------------------------- callout */
+  .note{
+    border-radius:9px; padding:.7rem .9rem; margin:1rem 0; font-size:.875rem;
+    line-height:1.55; border:1px solid
+  }
+  .note.i{background:var(--panel); border-color:var(--line); color:var(--tx2)}
+  .note.g{background:var(--goodbg); border-color:var(--goodln); color:var(--good)}
+  .note.w{background:var(--warnbg); border-color:var(--warnln); color:var(--warn)}
+  .note.b{background:var(--badbg);  border-color:var(--badln);  color:var(--bad)}
+  .note b{color:inherit}
+  .note code{background:rgba(127,127,127,.16); border-color:transparent}
+
+  /* --------------------------------------------------------------- table */
+  .tw{overflow-x:auto; margin:.8rem 0}
+  table{width:100%; border-collapse:collapse; font-size:.855rem; min-width:460px}
+  th{
+    text-align:left; font-size:.68rem; text-transform:uppercase; letter-spacing:.07em;
+    color:var(--tx3); padding:.45rem .7rem; border-bottom:1px solid var(--line);
+    font-weight:700; white-space:nowrap
+  }
+  td{padding:.5rem .7rem; border-bottom:1px solid var(--line2); vertical-align:top}
+  td:first-child{white-space:nowrap}
+  tr:last-child td{border-bottom:0}
+
+  /* ------------------------------------------------------------ endpoint */
+  .ep{
+    display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px;
+    padding:.55rem .75rem; margin:1.4rem 0 .5rem; font-size:.87rem
+  }
+  .ep .v{
+    font-size:.66rem; font-weight:800; padding:.14rem .42rem; border-radius:4px;
+    font-family:ui-monospace,monospace; letter-spacing:.03em
+  }
+  .ep .p{font-family:ui-monospace,monospace; color:var(--tx); overflow-wrap:anywhere}
+  .ep .auth{
+    margin-left:auto; font-size:.68rem; color:var(--tx3); white-space:nowrap;
+    border:1px solid var(--line); border-radius:999px; padding:.05rem .45rem
+  }
+  .ep .auth.open{color:var(--good); border-color:var(--goodln); background:var(--goodbg)}
+
+  /* -------------------------------------------------------------- pills */
+  .pills{display:flex; gap:.4rem; flex-wrap:wrap; margin:.9rem 0 0}
+  .pill{
+    font-size:.72rem; background:var(--panel2); border:1px solid var(--line);
+    color:var(--tx2); padding:.12rem .55rem; border-radius:999px
+  }
+
+  .foot{margin-top:4rem; padding-top:1.2rem; border-top:1px solid var(--line2);
+    color:var(--tx3); font-size:.8rem}
+  .anch{color:var(--tx3); text-decoration:none; font-weight:400; opacity:0;
+    transition:opacity .12s; margin-left:.4rem; font-size:.8em}
+  h2:hover .anch,h3:hover .anch{opacity:1}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <button id="menu" aria-label="Toggle navigation">☰</button>
+  <b style="font-size:.92rem">PyrusLLM Docs</b>
+  <button id="theme2" style="margin-left:auto" aria-label="Toggle theme">◐</button>
+</div>
+<div class="scrim" id="scrim"></div>
+
+<div class="wrap">
+<aside id="side">
+  <div class="brand">
+    <span class="mark">PL</span>
+    <b>PyrusLLM</b>
+    <span class="ver">v0.12.1</span>
+  </div>
+  <nav id="nav">
+    <div class="grp">Getting started</div>
+    <a href="#overview">Overview</a>
+    <a href="#cli-or-api">CLI or API?</a>
+    <a href="#install">Install</a>
+    <a href="#quickstart">Quickstart</a>
+
+    <div class="grp">CLI reference</div>
+    <a href="#cli">Global flags</a>
+    <a href="#cli-prompt">pyrusllm prompt</a>
+    <a href="#cli-serve">pyrusllm serve</a>
+    <a href="#cli-peers">pyrusllm peers</a>
+    <a href="#cli-send">pyrusllm send</a>
+    <a href="#cli-fetch">pyrusllm fetch</a>
+    <a href="#cli-files">pyrusllm files</a>
+    <a href="#cli-wallet">pyrusllm wallet</a>
+
+    <div class="grp">API — basics</div>
+    <a href="#auth">Authentication</a>
+    <a href="#errors">Errors</a>
+
+    <div class="grp">API — inference</div>
+    <a href="#ep-chat"><span class="m post">POST</span>/v1/chat/completions</a>
+    <a href="#ep-models"><span class="m get">GET</span>/v1/models</a>
+
+    <div class="grp">API — network</div>
+    <a href="#ep-nodes"><span class="m get">GET</span>/v1/nodes</a>
+    <a href="#ep-agent"><span class="m get">GET</span>/v1/agent</a>
+    <a href="#ep-launch"><span class="m post">POST</span>/v1/agent/launch</a>
+    <a href="#ep-manifest"><span class="m get">GET</span>/v1/swarm/manifest</a>
+    <a href="#ep-log"><span class="m get">GET</span>/v1/routing-log</a>
+
+    <div class="grp">API — keys</div>
+    <a href="#ep-keys"><span class="m get">GET</span>/v1/keys</a>
+    <a href="#ep-keys-new"><span class="m post">POST</span>/v1/keys</a>
+    <a href="#ep-keys-del"><span class="m del">DEL</span>/v1/keys/:id</a>
+
+    <div class="grp">API — economics</div>
+    <a href="#ep-quota"><span class="m get">GET</span>/v1/quota</a>
+    <a href="#ep-budget"><span class="m get">GET</span>/v1/budget</a>
+    <a href="#ep-receipts"><span class="m get">GET</span>/v1/receipts/:id</a>
+    <a href="#x402">The x402 flow</a>
+
+    <div class="grp">API — wallet</div>
+    <a href="#ep-wallet"><span class="m get">GET</span>/v1/wallet</a>
+    <a href="#ep-balances"><span class="m get">GET</span>/v1/wallet/balances</a>
+    <a href="#ep-send"><span class="m post">POST</span>/v1/wallet/send</a>
+    <a href="#ep-wallet-rest">Other wallet routes</a>
+
+    <div class="grp">API — files</div>
+    <a href="#ep-files"><span class="m get">GET</span>/v1/files</a>
+    <a href="#ep-upload"><span class="m post">POST</span>/v1/files/upload</a>
+
+    <div class="grp">API — upstream</div>
+    <a href="#ep-upstream"><span class="m get">GET</span>/v1/upstream</a>
+    <a href="#ep-optin"><span class="m post">POST</span>/v1/upstream/opt-in</a>
+
+    <div class="grp">Reference</div>
+    <a href="#panels">Browser panels</a>
+    <a href="#env">Environment</a>
+    <a href="#models">Models</a>
+  </nav>
+</aside>
+
+<main>
+
+<h1>PyrusLLM</h1>
+<p class="lede">An LLM inference node distributed over Pear. It installs over P2P,
+updates itself over OTA, and exposes your machine to the network as an
+OpenAI-compatible endpoint.</p>
+
+<div class="pills">
+  <span class="pill">v0.12.1</span>
+  <span class="pill">Bare runtime</span>
+  <span class="pill">OpenAI-compatible</span>
+  <span class="pill">Ed25519 signed manifest</span>
+  <span class="pill">x402 payments</span>
+</div>
+
+<h2 id="overview">Overview <a class="anch" href="#overview">#</a></h2>
+<p>PyrusLLM turns a machine into a node on a peer-to-peer inference marketplace.
+Each node announces a <strong>signed manifest</strong> declaring which model it serves, what it
+charges and how loaded it is. Any node can ask any other for a completion, and the
+answer arrives with provenance attached: which machine produced it, how fast, and
+what it cost.</p>
+
+<div class="cards">
+  <div class="card">
+    <div class="ico">🖥️</div><b>Runs locally</b>
+    <p>Weights travel over hypercore, not HTTP, and are cached on disk. Nothing
+    leaves your machine unless you ask it to.</p>
+  </div>
+  <div class="card">
+    <div class="ico">🔗</div><b>Joins a network</b>
+    <p>A fixed DHT topic discovers peers. Only nodes whose signed manifest
+    verifies become routing candidates.</p>
+  </div>
+  <div class="card">
+    <div class="ico">💸</div><b>Gets paid</b>
+    <p>The manifest carries a payout address. Paid requests settle over x402 and
+    come back with a receipt and an attestation.</p>
+  </div>
+</div>
+
+<h2 id="cli-or-api">Is PyrusLLM a CLI or an API? <a class="anch" href="#cli-or-api">#</a></h2>
+<p><strong>It is both</strong>, and the distinction matters because they are used by
+different people at different moments.</p>
+
+<div class="tw"><table>
+<thead><tr><th>Surface</th><th>What it is</th><th>Who uses it</th></tr></thead>
+<tbody>
+<tr>
+  <td><code>pyrusllm &lt;cmd&gt;</code></td>
+  <td>A <strong>CLI</strong> you run in a terminal. It is how you start the node, join the
+      network, run a one-off prompt, move files and manage the wallet.</td>
+  <td>The <strong>operator</strong> of the machine.</td>
+</tr>
+<tr>
+  <td><code>http://localhost:8787/v1/…</code></td>
+  <td>An <strong>HTTP API</strong> served by <code>pyrusllm serve</code>. The
+      <code>/v1/chat/completions</code> and <code>/v1/models</code> routes are
+      OpenAI-compatible; the rest are PyrusLLM's own.</td>
+  <td><strong>Clients and agents</strong> — any OpenAI SDK, curl, Open WebUI, a Telegram bot.</td>
+</tr>
+</tbody></table></div>
+
+<div class="note i">
+<b>The relationship:</b> the CLI command <code>pyrusllm serve</code> is what
+<em>starts</em> the API. Everything the browser panels do, they do through that same
+public API with a Bearer key — there is no privileged path reserved for the UI.
+</div>
+
+<h2 id="install">Install <a class="anch" href="#install">#</a></h2>
+<h4>Over npm</h4>
+<pre><code>npm install -g pyrusllm</code></pre>
+<h4>Over P2P (Pear)</h4>
+<pre><code>pear install pear://8f789f6hsf4ghymku5eqwqmbqiubiigp8xpy6boiymunnbyznpny</code></pre>
+<div class="note i">The npm package ships a Node launcher that delegates to the
+<strong>Bare</strong> runtime; the node itself does not run on Node. The correct Bare binary for
+your platform is pulled in as an optional dependency at install time.</div>
+
+<h2 id="quickstart">Quickstart <a class="anch" href="#quickstart">#</a></h2>
+<h4>1. Answer a prompt, fully offline</h4>
+<pre><code>pyrusllm prompt <span class="c-st">"Explain peer-to-peer in one sentence"</span></code></pre>
+
+<h4>2. Start the gateway and join the network</h4>
+<pre><code>pyrusllm serve <span class="c-fl">--swarm</span> <span class="c-fl">--operator</span> <span class="c-st">"your name"</span></code></pre>
+
+<h4>3. Call it like OpenAI</h4>
+<pre><code>curl http://localhost:8787/v1/chat/completions \
+  -H <span class="c-st">"Authorization: Bearer $PYRUS_KEY"</span> \
+  -H <span class="c-st">"Content-Type: application/json"</span> \
+  -d <span class="c-st">'{"model":"llama1b","messages":[{"role":"user","content":"hello"}],"stream":true}'</span></code></pre>
+
+<div class="note w">You need a key for step 3. Create one from the
+<a href="#panels">My Node panel</a> or with <a href="#ep-keys-new">POST /v1/keys</a>.</div>
+
+<!-- ==================================================================== -->
+<h2 id="cli">CLI — global flags <a class="anch" href="#cli">#</a></h2>
+<p>Run <code>pyrusllm --help</code> to list every command, or
+<code>pyrusllm &lt;command&gt; --help</code> for one command's full detail.</p>
+<pre><code>pyrusllm [flags] [command]</code></pre>
+<div class="tw"><table>
+<thead><tr><th>Flag</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>--version</code>, <code>-v</code></td><td>Print the current version</td></tr>
+<tr><td><code>--storage &lt;dir&gt;</code></td><td>Custom storage directory</td></tr>
+<tr><td><code>--no-updates</code></td><td>Disable OTA updates for this run</td></tr>
+<tr><td><code>--port &lt;n&gt;</code></td><td>App HTTP port (default 8787)</td></tr>
+<tr><td><code>--no-serve</code></td><td>Only the OTA updater, without starting the app</td></tr>
+<tr><td><code>--no-open</code></td><td>Do not open the browser on start</td></tr>
+<tr><td><code>--update-delay &lt;ms&gt;</code></td><td>OTA jitter window in ms (default 10000)</td></tr>
+</tbody></table></div>
+<div class="note w"><b>One process per storage directory.</b> The Corestore takes a
+lock on it. A second node against the same <code>--storage</code> fails with
+"File descriptor could not be locked" — use a different directory, or
+<code>--no-store</code>.</div>
+
+<h2 id="cli-prompt"><code>pyrusllm prompt</code> <a class="anch" href="#cli-prompt">#</a></h2>
+<p>Answer a prompt with 100% local inference. Loads an LLM with QVAC and answers
+without leaving this machine.</p>
+<pre><code>pyrusllm prompt <span class="c-st">"&lt;prompt&gt;"</span> [flags]</code></pre>
+<div class="tw"><table>
+<thead><tr><th>Argument / flag</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>&lt;prompt&gt;</code></td><td>The text to answer, or <code>-</code> to read it from stdin</td></tr>
+<tr><td><code>--model &lt;alias&gt;</code></td><td>Model alias or exact registry name (default <code>llama1b</code>)</td></tr>
+<tr><td><code>--ctx &lt;n&gt;</code></td><td>Context size</td></tr>
+<tr><td><code>--gpu-layers &lt;n&gt;</code></td><td>Layers to send to the GPU. <code>0</code> = all CPU</td></tr>
+<tr><td><code>--no-download</code></td><td>Fail instead of downloading the weights when not cached</td></tr>
+<tr><td><code>--quiet</code>, <code>-q</code></td><td>Print only the answer, no diagnostics or measurements</td></tr>
+</tbody></table></div>
+<div class="note i"><b>Use <code>-</code> on Windows for non-ASCII prompts.</b> The standalone
+binary receives argv in the ANSI codepage, which mangles accented characters.
+stdin is a byte stream and does not go through that conversion:
+<code>echo "Respondé…" | pyrusllm prompt -</code></div>
+<div class="note w">On a weak iGPU (Intel UHD 620), <code>--gpu-layers 0</code> measured
+<strong>5× faster</strong> than letting the SDK decide. See <code>NOTES.md</code>.</div>
+
+<h2 id="cli-serve"><code>pyrusllm serve</code> <a class="anch" href="#cli-serve">#</a></h2>
+<p>Start the OpenAI-compatible gateway and the browser panels. <strong>This is the command
+that turns on the HTTP API.</strong></p>
+<pre><code>pyrusllm serve [flags]</code></pre>
+<div class="tw"><table>
+<thead><tr><th>Flag</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>--port &lt;n&gt;</code></td><td>Gateway HTTP port (default 8787)</td></tr>
+<tr><td><code>--swarm</code></td><td>Join the P2P topic and populate the registry with verified peers</td></tr>
+<tr><td><code>--operator &lt;name&gt;</code></td><td>Operator name announced in the manifest</td></tr>
+<tr><td><code>--demo</code></td><td>Populate the registry with simulated nodes (1 real + 3 mocks)</td></tr>
+<tr><td><code>--no-store</code></td><td>Do not open the Hyperbee/Hyperdrive: no persistence, no files</td></tr>
+<tr><td><code>--gpu-layers &lt;n&gt;</code></td><td>Layers to send to the real node's GPU. <code>0</code> = all CPU</td></tr>
+</tbody></table></div>
+<div class="note i">Without <code>--swarm</code> the gateway serves the panels and the API but
+stays off the network: the registry starts <strong>empty</strong> and requests for a model
+nobody serves return a clear "no nodes serving that model" error. That is the honest
+state, not a bug.</div>
+
+<h2 id="cli-peers"><code>pyrusllm peers</code> <a class="anch" href="#cli-peers">#</a></h2>
+<p>Join the P2P topic and list the peers with a verified manifest, without starting
+the gateway. Reports join → first peer and join → first verified manifest timings.</p>
+<pre><code>pyrusllm peers [flags]</code></pre>
+<div class="tw"><table>
+<thead><tr><th>Flag</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>--operator &lt;name&gt;</code></td><td>Operator name announced in the manifest</td></tr>
+<tr><td><code>--timeout &lt;s&gt;</code></td><td>Exit after N seconds (default: never exits, Ctrl+C)</td></tr>
+<tr><td><code>--expect &lt;n&gt;</code></td><td>Exit code 1 if fewer than N verified peers on exit</td></tr>
+</tbody></table></div>
+<div class="note w"><b>Discovery takes ~17 s.</b> Run this on both machines with
+<strong>overlapping windows</strong> — a short <code>--timeout</code> on one side while the other
+has not joined yet reports 0 peers and looks like a network fault when it is not.</div>
+
+<h2 id="cli-send"><code>pyrusllm send</code> <a class="anch" href="#cli-send">#</a></h2>
+<p>Publish a file or folder into this node's Hyperdrive and announce it on the DHT.
+Prints a <code>qvac://</code> link.</p>
+<pre><code>pyrusllm send &lt;path&gt; [<span class="c-fl">--as</span> &lt;name&gt;]</code></pre>
+<div class="note w"><b>The process stays running on purpose.</b> Hypercore is not
+store-and-forward: there is no server holding the file. The bytes come out of your
+machine, so it must stay on while the other side downloads.</div>
+
+<h2 id="cli-fetch"><code>pyrusllm fetch</code> <a class="anch" href="#cli-fetch">#</a></h2>
+<p>Download a file published by another machine.</p>
+<pre><code>pyrusllm fetch qvac://&lt;key&gt;/&lt;path&gt; [<span class="c-fl">--out</span> &lt;dir&gt;] [<span class="c-fl">--timeout</span> &lt;s&gt;]</code></pre>
+<div class="note g">Every block is verified against the drive's merkle root as it
+arrives, so a file tampered with midway cannot complete. What the key does
+<strong>not</strong> prove is <em>whose</em> it is — that depends on the channel the link
+arrived through.</div>
+
+<h2 id="cli-files"><code>pyrusllm files</code> <a class="anch" href="#cli-files">#</a></h2>
+<p>List the files published by this node, or by a peer.</p>
+<pre><code>pyrusllm files [<span class="c-fl">--link</span> qvac://…] [<span class="c-fl">--timeout</span> &lt;s&gt;]</code></pre>
+<p>With <code>--link</code> it lists a remote drive without downloading the content:
+Hyperdrive metadata replicates separately from the blobs.</p>
+
+<h2 id="cli-wallet"><code>pyrusllm wallet</code> <a class="anch" href="#cli-wallet">#</a></h2>
+<p>Show, create or restore this node's payout wallet.</p>
+<pre><code>pyrusllm wallet [<span class="c-fl">--create</span> | <span class="c-fl">--restore</span> <span class="c-st">"&lt;24 words&gt;"</span>]</code></pre>
+<div class="tw"><table>
+<thead><tr><th>Flag</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><em>(none)</em></td><td>Show the payout address, or say there is no wallet yet</td></tr>
+<tr><td><code>--create</code></td><td>Generate a new wallet for this node</td></tr>
+<tr><td><code>--restore &lt;phrase&gt;</code></td><td>Restore from the 24 words of a backup</td></tr>
+</tbody></table></div>
+<div class="note b"><b>The 24 words are shown once.</b> Write them down. Without them
+<em>and</em> without the keystore, the wallet is lost. The seed is stored encrypted with
+<code>PYRUS_WALLET_PASSPHRASE</code>; if that <code>.env</code> lives next to the keystore, the
+encryption protects against a backup or a repo — not against somebody who already
+has access to the machine.</div>
+
+<!-- ==================================================================== -->
+<h2 id="auth">Authentication <a class="anch" href="#auth">#</a></h2>
+<p>Every API route except the three noted below requires a Bearer key:</p>
+<pre><code>Authorization: Bearer &lt;key&gt;</code></pre>
+<p>Keys are created per client so a single bot can be cut off without touching the
+rest. They are stored on the machine and <strong>survive a restart</strong> — they have to: the
+spend cap is counted per key, and a registry that reset with the process would be a
+cap you could clear by restarting the node.</p>
+
+<h4>Routes that need no key</h4>
+<div class="tw"><table>
+<thead><tr><th>Route</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><code>GET /v1/models</code></td><td>An OpenAI client must discover the catalog before it has a key. The data is sanitised instead — no operator, no pricing.</td></tr>
+<tr><td><code>GET /v1/receipts/:id</code></td><td>Whoever paid through a 402 has no key by definition. Demanding one would leave them unable to audit what they paid for.</td></tr>
+<tr><td><code>GET /v1/keys/panel</code></td><td>The bootstrap the browser panel uses to obtain its own key.</td></tr>
+</tbody></table></div>
+
+<h2 id="errors">Errors <a class="anch" href="#errors">#</a></h2>
+<p>Errors come back in OpenAI shape:</p>
+<pre><code>{ <span class="c-kw">"error"</span>: { <span class="c-kw">"message"</span>: <span class="c-st">"…"</span>, <span class="c-kw">"type"</span>: <span class="c-st">"…"</span> } }</code></pre>
+<div class="tw"><table>
+<thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>400</code></td><td>Malformed body or invalid parameters</td></tr>
+<tr><td><code>401</code></td><td>Missing, unknown or revoked key</td></tr>
+<tr><td><code>402</code></td><td>Payment required — see <a href="#x402">the x402 flow</a>. Also returned when the spend cap is hit, <em>without</em> an <code>accepts</code> array.</td></tr>
+<tr><td><code>404</code></td><td>No node serving that model, or unknown receipt id</td></tr>
+<tr><td><code>502</code></td><td>The chosen provider failed mid-request</td></tr>
+</tbody></table></div>
+
+<!-- ==================================================================== -->
+<h2 id="ep-chat">Create a chat completion <a class="anch" href="#ep-chat">#</a></h2>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/chat/completions</span><span class="auth">Bearer</span></div>
+<p>OpenAI-compatible. The gateway picks a node by load and price, streams the answer
+back, and attaches provenance headers.</p>
+
+<h4>Body</h4>
+<div class="tw"><table>
+<thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>model</code></td><td>string</td><td>Model id or alias, e.g. <code>llama1b</code></td></tr>
+<tr><td><code>messages</code></td><td>array</td><td>Standard <code>{role, content}</code> turns</td></tr>
+<tr><td><code>stream</code></td><td>boolean</td><td>SSE streaming when <code>true</code></td></tr>
+<tr><td><code>local</code></td><td>boolean</td><td><strong>PyrusLLM extension.</strong> Keep the request on this machine; never route to a peer or an external API</td></tr>
+<tr><td><code>node</code></td><td>string</td><td><strong>PyrusLLM extension.</strong> Pin one specific machine by id. No fallback if it is busy</td></tr>
+</tbody></table></div>
+
+<h4>Response headers</h4>
+<div class="tw"><table>
+<thead><tr><th>Header</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>X-Pyrus-Operator</code></td><td>Who answered (URI-encoded)</td></tr>
+<tr><td><code>X-Pyrus-Kind</code></td><td><code>real</code> · <code>peer</code> · <code>mock</code> · <code>upstream</code></td></tr>
+<tr><td><code>X-Pyrus-Scope</code></td><td><code>local</code> or <code>external</code> — whether the prompt left the network</td></tr>
+<tr><td><code>X-Pyrus-Model</code></td><td>The model that actually served it</td></tr>
+<tr><td><code>X-Pyrus-Cost-Estimate-Micros</code></td><td>The <strong>ceiling</strong> the spend was authorised against, in micro-dollars. Not the final cost: with SSE the headers go out before the first token.</td></tr>
+</tbody></table></div>
+
+<div class="note i"><b><code>X-Pyrus-Scope</code> is the field that matters for privacy.</b>
+<code>kind: upstream</code> does not by itself mean the prompt left your machine — a
+llama-server on localhost is also an upstream. <code>scope: external</code> is the one that
+says a third party saw it.</div>
+
+<h4>Example</h4>
+<pre><code>curl http://localhost:8787/v1/chat/completions \
+  -H <span class="c-st">"Authorization: Bearer $PYRUS_KEY"</span> \
+  -H <span class="c-st">"Content-Type: application/json"</span> \
+  -d <span class="c-st">'{
+        "model": "llama1b",
+        "messages": [{"role":"user","content":"hello"}],
+        "stream": true,
+        "local": false
+      }'</span></code></pre>
+
+<div class="note i">When streaming, a <strong>final SSE event</strong> may carry
+<code>paymentResponse</code> and <code>attestation</code> instead of a completion chunk — it has
+no <code>choices</code>. See <a href="#x402">the x402 flow</a>.</div>
+
+<h2 id="ep-models">List models <a class="anch" href="#ep-models">#</a></h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/models</span><span class="auth open">No key</span></div>
+<p>OpenAI-compatible catalog of every model the network announces.</p>
+<pre><code>{
+  <span class="c-kw">"object"</span>: <span class="c-st">"list"</span>,
+  <span class="c-kw">"data"</span>: [{ <span class="c-kw">"id"</span>: <span class="c-st">"llama1b"</span>, <span class="c-kw">"object"</span>: <span class="c-st">"model"</span>, <span class="c-kw">"owned_by"</span>: <span class="c-st">"pyrusllm"</span> }]
+}</code></pre>
+<div class="note i">Deliberately sanitised: it names the model, never the operator or
+the price. Those live behind <a href="#ep-nodes">/v1/nodes</a>, which needs a key.</div>
+
+<!-- ==================================================================== -->
+<h2 id="ep-nodes">List nodes <a class="anch" href="#ep-nodes">#</a></h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/nodes</span><span class="auth">Bearer</span></div>
+<p>The rich marketplace view: operator, price, load, kind. Returns
+<code>{ nodes, swarm }</code>; <code>swarm</code> is <code>null</code> when this gateway has not joined
+the P2P network yet.</p>
+<div class="tw"><table>
+<thead><tr><th>Node kind</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>real</code></td><td>This machine</td></tr>
+<tr><td><code>peer</code></td><td>A genuinely remote node, discovered over the swarm, signed manifest verified</td></tr>
+<tr><td><code>mock</code></td><td>Simulated (<code>--demo</code>). Always labelled as such in the UI</td></tr>
+<tr><td><code>upstream</code></td><td>Reached over HTTP. May be a third-party API <em>or</em> a local engine — check <code>local</code></td></tr>
+<tr><td><code>known</code></td><td>In the directory, manifest verified once, but no socket now. Never a routing candidate</td></tr>
+</tbody></table></div>
+
+<h2 id="ep-agent">Agent status <a class="anch" href="#ep-agent">#</a></h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/agent</span><span class="auth open">No key</span></div>
+<p>Whether this machine has joined the network. Statuses:
+<code>offline</code>, <code>launching</code>, <code>live</code>, <code>error</code>.
+Also carries <code>canLaunch</code> — false when the gateway was started without swarm support.</p>
+
+<h2 id="ep-launch">Launch the agent <a class="anch" href="#ep-launch">#</a></h2>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/agent/launch</span><span class="auth">Bearer</span></div>
+<p>Joins the P2P network at runtime — the API equivalent of restarting with
+<code>--swarm</code>. Requires a gateway started with launch support.</p>
+
+<h2 id="ep-manifest">Swarm manifest <a class="anch" href="#ep-manifest">#</a></h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/swarm/manifest</span><span class="auth">Bearer</span></div>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/swarm/manifest</span><span class="auth">Bearer</span></div>
+<p><code>GET</code> returns the signed manifest, the model catalog with a
+<code>fits</code> flag per model (does it fit in this machine's RAM), and
+<code>modelLoad</code> status. <code>POST</code> edits <code>displayName</code>, <code>tags</code>,
+<code>maxConcurrentRequests</code> or <code>modelId</code> and <strong>re-signs</strong>.</p>
+<div class="note w">Switching <code>modelId</code> triggers a real model load. It can take
+several seconds or fail for lack of memory, while the node keeps answering with the
+current model. On failure the current model is kept.</div>
+
+<h2 id="ep-log">Routing log <a class="anch" href="#ep-log">#</a></h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/routing-log</span><span class="auth">Bearer</span></div>
+<p>Both directions of the exchange, separated by <code>kind</code>: <code>served</code> is what
+this node produced for a peer, <code>route</code> is what it asked of somebody else. Each
+entry carries tokens, TTFT, tok/s, the D25 prefill/decode split with its
+<code>tokensFuente</code> provenance, and <code>finishReason</code>.</p>
+
+<!-- ==================================================================== -->
+<h2 id="ep-keys">List keys <a class="anch" href="#ep-keys">#</a></h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/keys</span><span class="auth">Bearer</span></div>
+<p>Returns <code>{ keys: [{ id, label, key, lastUsedAt }] }</code>.</p>
+
+<h2 id="ep-keys-new">Create a key <a class="anch" href="#ep-keys-new">#</a></h2>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/keys</span><span class="auth">Bearer</span></div>
+<pre><code>curl -X POST http://localhost:8787/v1/keys \
+  -H <span class="c-st">"Authorization: Bearer $PYRUS_KEY"</span> \
+  -H <span class="c-st">"Content-Type: application/json"</span> \
+  -d <span class="c-st">'{"label":"telegram bot"}'</span></code></pre>
+
+<h2 id="ep-keys-del">Revoke keys <a class="anch" href="#ep-keys-del">#</a></h2>
+<div class="ep"><span class="v m del">DELETE</span><span class="p">/v1/keys/:id</span><span class="auth">Bearer</span></div>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/keys/revoke-all</span><span class="auth">Bearer</span></div>
+<p>Revocation takes effect immediately — whatever is using the key stops working.</p>
+<div class="note w"><code>revoke-all</code> kills the browser panel's own key too. The panel
+re-credentials itself automatically; a script would need to fetch a new key.</div>
+
+<!-- ==================================================================== -->
+<h2 id="ep-quota">Free-tier quota <a class="anch" href="#ep-quota">#</a></h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/quota</span><span class="auth">Bearer</span></div>
+<p>What this node <strong>gives away</strong>: <code>given_tokens</code>, <code>quota_tokens</code>
+per peer, <code>window_hours</code> (a sliding window, so it tops back up), and per-peer
+usage. Enforced here, by the machine paying the electricity — not by whoever is asking.</p>
+
+<h2 id="ep-budget">Spend cap <a class="anch" href="#ep-budget">#</a></h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/budget</span><span class="auth">Bearer</span></div>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/budget/report</span><span class="auth">Bearer</span></div>
+<p>What this node <strong>spends</strong> on external APIs. Local inference is in neither meter —
+it costs nobody anything but your electricity.</p>
+<div class="note i"><b>There are two caps</b> and either can be the one that cuts: a
+per-client cap and a per-machine total. Show the <strong>smaller</strong> remainder — with the
+account at USD 20 and the node at USD 2, saying "you have 20 left" promises nineteen
+that do not exist.</div>
+
+<h2 id="ep-receipts">Look up a receipt <a class="anch" href="#ep-receipts">#</a></h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/receipts/:id</span><span class="auth open">No key</span></div>
+<p>Takes the completion id (<code>chatcmpl-…</code>) that came back with the answer, and
+returns the settlement receipt plus the attestation.</p>
+<div class="note w">Receipts live in <strong>process memory</strong> and only the last 200 are
+kept. This is not a ledger — the real ledger is the chain. A restart wipes them.
+There is deliberately no route that <em>lists</em> receipts.</div>
+
+<h2 id="x402">The x402 payment flow <a class="anch" href="#x402">#</a></h2>
+<p>A request to a node with a wallet, without a valid credential, gets a
+<code>402</code> whose body is not an error string but a <strong>quote</strong>: how much, to whom, on
+which network, and up to how many tokens.</p>
+<pre><code><span class="c-cm">// 402 response</span>
+{ <span class="c-kw">"accepts"</span>: [{ <span class="c-kw">"scheme"</span>: …, <span class="c-kw">"network"</span>: …, <span class="c-kw">"payTo"</span>: …, <span class="c-kw">"maxAmountRequired"</span>: … }] }</code></pre>
+<p>After paying, the answer streams back and a <strong>final SSE event</strong> carries the proof:</p>
+<div class="tw"><table>
+<thead><tr><th>Field</th><th>What it proves</th></tr></thead>
+<tbody>
+<tr><td><code>paymentResponse</code></td><td>Somebody paid — the settlement receipt</td></tr>
+<tr><td><code>attestation</code></td><td>What this node served, signed with the payout wallet over the JCS form of everything except the signature</td></tr>
+<tr><td><code>attestationMissing</code></td><td>Present instead, with the reason, when no attestation could be produced</td></tr>
+</tbody></table></div>
+<div class="note g"><b>Verify it yourself.</b> The attestation's <code>outputHash</code> is
+over the <strong>text</strong>, not the chunking — so a provider that inflates the gateway's chunk
+count by chopping the stream finer cannot move it. Recompute it against the answer you
+actually received.</div>
+<div class="note b">A <code>402</code> <em>without</em> an <code>accepts</code> array is a different
+thing entirely: your spend cap is exhausted. There is nothing to pay — a limit was hit.</div>
+
+<!-- ==================================================================== -->
+<h2 id="ep-wallet">Wallet status <a class="anch" href="#ep-wallet">#</a></h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/wallet</span><span class="auth">Bearer</span></div>
+<p>The payout address, the chains and the settlement asset. Returns
+<code>configured: false</code> when there is no wallet — a normal state for a node that only
+consumes, not an error.</p>
+
+<h2 id="ep-balances">Balances <a class="anch" href="#ep-balances">#</a></h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/wallet/balances</span><span class="auth">Bearer</span></div>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/wallet/history</span><span class="auth">Bearer</span></div>
+<p>Native and token balances, and the movement history read from the explorer.</p>
+
+<h2 id="ep-send">Send funds <a class="anch" href="#ep-send">#</a></h2>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/wallet/send/quote</span><span class="auth">Bearer</span></div>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/wallet/send</span><span class="auth">Bearer</span></div>
+<p>Two steps on purpose: <code>quote</code> estimates gas and returns the exact fields, and
+<code>send</code> signs and broadcasts <em>those same fields</em>. Re-reading the form between the
+two would open the door to reviewing one thing and sending another.</p>
+<div class="note b"><b>Mainnet requires explicit confirmation.</b> Send
+<code>confirmar: "MAINNET"</code> in the body. This moves real money and cannot be undone.
+<strong>The node signs, never the browser</strong> — the seed never leaves the process that opens it.</div>
+
+<h2 id="ep-wallet-rest">Other wallet routes <a class="anch" href="#ep-wallet-rest">#</a></h2>
+<div class="tw"><table>
+<thead><tr><th>Route</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>POST /v1/wallet/create</code></td><td>Create a wallet (empty body) or import one (<code>{ frase }</code>). Returns the 24 words <strong>once</strong> for a new wallet</td></tr>
+<tr><td><code>POST /v1/wallet/network</code></td><td>Switch network. No hot-swap: it saves and asks for a restart. Mainnet needs <code>confirmar: "MAINNET"</code></td></tr>
+<tr><td><code>POST /v1/wallet/tokens</code></td><td>Watch an ERC-20: <code>{ address, symbol, decimals }</code></td></tr>
+<tr><td><code>DELETE /v1/wallet/tokens</code></td><td>Stop watching a token</td></tr>
+</tbody></table></div>
+
+<!-- ==================================================================== -->
+<h2 id="ep-files">List files <a class="anch" href="#ep-files">#</a></h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/files</span><span class="auth">Bearer</span></div>
+<p>Lists this node's Hyperdrive. Pass <code>?peerKey=&lt;hex&gt;</code> to list a peer's drive
+instead — without it you always get the local one, whichever node you meant.</p>
+
+<h2 id="ep-upload">Upload and fetch <a class="anch" href="#ep-upload">#</a></h2>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/files/upload?name=&lt;name&gt;</span><span class="auth">Bearer</span></div>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/files/fetch</span><span class="auth">Bearer</span></div>
+<p>Upload sends the raw body as the file content. Fetch downloads a
+<code>qvac://</code> link to this node's disk — the API equivalent of
+<a href="#cli-fetch"><code>pyrusllm fetch</code></a>.</p>
+
+<!-- ==================================================================== -->
+<h2 id="ep-upstream">External assistant <a class="anch" href="#ep-upstream">#</a></h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/upstream</span><span class="auth">Bearer</span></div>
+<p>Lists the configured upstreams and whether each has its credential. Configuring a
+new upstream or changing a credential is <strong>not</strong> possible over HTTP — that lives in
+<code>upstreams.json</code> on the operator's disk.</p>
+
+<h2 id="ep-optin">Opt in or out <a class="anch" href="#ep-optin">#</a></h2>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/upstream/opt-in</span><span class="auth">Bearer</span></div>
+<pre><code>{ <span class="c-kw">"enabled"</span>: <span class="c-kw">true</span> }</code></pre>
+<div class="note b"><b>This is the one path where a prompt leaves the P2P network</b> and
+goes to a company's API, which sees it, may log it, and bills it. <strong>Off by default.</strong>
+Even switched on it only competes when nobody local or on the network has capacity, and
+never when the request asks to stay on this machine.</div>
+<div class="note i">Turning it on here does not write the config file: on restart it
+goes back to whatever <code>upstreams.json</code> says.</div>
+
+<!-- ==================================================================== -->
+<h2 id="panels">Browser panels <a class="anch" href="#panels">#</a></h2>
+<p><code>pyrusllm serve</code> also serves four pages. They are plain clients of the API
+above — same Bearer key, no privileged path.</p>
+<div class="tw"><table>
+<thead><tr><th>Route</th><th>Panel</th></tr></thead>
+<tbody>
+<tr><td><code>/</code></td><td><strong>Chat</strong> — ask the network; every answer names the machine that produced it</td></tr>
+<tr><td><code>/node</code></td><td><strong>My Node</strong> — your machine as a provider: status, load, rate, keys, traffic, meters</td></tr>
+<tr><td><code>/network</code></td><td><strong>Network</strong> — every node this machine knows about, and their files</td></tr>
+<tr><td><code>/wallet</code></td><td><strong>Wallet</strong> — address, balance, movements, send, network and token settings</td></tr>
+<tr><td><code>/admin</code></td><td><strong>Admin</strong> — all nodes plus the raw routing log</td></tr>
+</tbody></table></div>
+
+<h2 id="env">Environment <a class="anch" href="#env">#</a></h2>
+<div class="tw"><table>
+<thead><tr><th>Variable</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>PYRUS_WALLET_PASSPHRASE</code></td><td>Encrypts the wallet seed. Required by <code>wallet --create</code></td></tr>
+<tr><td><code>PYRUS_WALLET_RED</code></td><td>Pins the network. When set, the panel's network selector is disabled</td></tr>
+<tr><td><code>PYRUS_WALLET_RPC</code></td><td>Override the RPC endpoint</td></tr>
+<tr><td><code>PYRUS_X402_FACILITATOR</code></td><td>x402 facilitator URL</td></tr>
+<tr><td><code>PYRUS_X402_PLASMA_ASSET_VERIFICADO</code></td><td>Must be <code>1</code> to charge on Plasma mainnet — a human step: verify the USD₮0 contract on the explorer first</td></tr>
+</tbody></table></div>
+<p>All of these can live in a <code>.env</code> in the storage directory.</p>
+
+<h2 id="models">Models <a class="anch" href="#models">#</a></h2>
+<p>Aliases accepted by <code>--model</code> and by the <code>model</code> field:</p>
+<div class="pills">
+  <span class="pill">smol</span>
+  <span class="pill">llama1b <em>(default)</em></span>
+  <span class="pill">qwen1_7b</span>
+  <span class="pill">qwen4b</span>
+  <span class="pill">qwen8b</span>
+  <span class="pill">gemma4b</span>
+</div>
+<p style="margin-top:.9rem">An exact registry name also works. The catalog exposed by
+<a href="#ep-manifest">/v1/swarm/manifest</a> marks each model with <code>fits</code>, computed
+against this machine's RAM.</p>
+
+<div class="foot">
+  PyrusLLM v0.12.1 · Apache-2.0 · Generated from the source of
+  <code>bin.mjs</code> and <code>qvac/gateway.mjs</code>.
+</div>
+
+</main>
+</div>
+
+<script>
+(function () {
+  // Theme toggle. Starts on the viewer's system preference and only pins an
+  // explicit choice, so the page keeps following the OS until someone asks.
+  var KEY = 'pyrusdocs.theme'
+  try {
+    var saved = localStorage.getItem(KEY)
+    if (saved) document.documentElement.setAttribute('data-theme', saved)
+  } catch (e) {}
+  function flip () {
+    var cur = document.documentElement.getAttribute('data-theme')
+    if (!cur) {
+      cur = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    }
+    var next = cur === 'dark' ? 'light' : 'dark'
+    document.documentElement.setAttribute('data-theme', next)
+    try { localStorage.setItem(KEY, next) } catch (e) {}
+  }
+  var t2 = document.getElementById('theme2')
+  if (t2) t2.addEventListener('click', flip)
+
+  // Mobile drawer.
+  var side = document.getElementById('side')
+  var scrim = document.getElementById('scrim')
+  var menu = document.getElementById('menu')
+  function close () { side.classList.remove('open'); scrim.classList.remove('on') }
+  if (menu) {
+    menu.addEventListener('click', function () {
+      side.classList.toggle('open')
+      scrim.classList.toggle('on')
+    })
+  }
+  scrim.addEventListener('click', close)
+
+  // Active-section highlighting. IntersectionObserver over every anchored
+  // heading; the last one to cross the top band wins.
+  var links = [].slice.call(document.querySelectorAll('#nav a'))
+  var byHash = {}
+  links.forEach(function (a) { byHash[a.getAttribute('href').slice(1)] = a })
+  links.forEach(function (a) { a.addEventListener('click', close) })
+
+  var heads = [].slice.call(document.querySelectorAll('main h2[id]'))
+  if ('IntersectionObserver' in window && heads.length) {
+    var seen = {}
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) { seen[en.target.id] = en.isIntersecting })
+      var active = null
+      for (var i = 0; i < heads.length; i++) {
+        if (seen[heads[i].id]) { active = heads[i].id; break }
+      }
+      if (!active) return
+      links.forEach(function (a) { a.classList.remove('on') })
+      if (byHash[active]) byHash[active].classList.add('on')
+    }, { rootMargin: '0px 0px -78% 0px' })
+    heads.forEach(function (h) { obs.observe(h) })
+  }
+})()
+</script>
+</body>
+</html>

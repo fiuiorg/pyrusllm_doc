@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Errors — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/errors.html">
+
+<article id="doc">
+<div class="crumb">Documentation / API basics</div>
+<h1>Errors</h1>
+<p class="lede">Errors come back in OpenAI shape.</p>
+
+<pre><code>{ <span class="c-kw">"error"</span>: { <span class="c-kw">"message"</span>: <span class="c-st">"…"</span>, <span class="c-kw">"type"</span>: <span class="c-st">"…"</span> } }</code></pre>
+
+<h2 id="status-codes">Status codes</h2>
+<div class="tw"><table>
+<thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>400</code></td><td>Malformed body or invalid parameters</td></tr>
+<tr><td><code>401</code></td><td>Missing, unknown or revoked key</td></tr>
+<tr><td><code>402</code></td><td>Payment required — see <a href="api-economics.html#x402">the x402 flow</a>. Also returned when the spend cap is hit, <em>without</em> an <code>accepts</code> array.</td></tr>
+<tr><td><code>404</code></td><td>No node serving that model, or unknown receipt id</td></tr>
+<tr><td><code>502</code></td><td>The chosen provider failed mid-request</td></tr>
+</tbody></table></div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

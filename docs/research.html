@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research — PyrusLLM Docs</title>
+<meta name="description" content="Four papers on decentralized LLM inference, read closely and mapped against PyrusLLM's own design.">
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/research.html">
+
+<article id="doc">
+<div class="crumb">Research</div>
+<h1>Four papers, read for what they mean for PyrusLLM</h1>
+<p class="lede">Four independent groups, four disciplines — systems, cryptoeconomics,
+mechanism design, control theory — published between January 2025 and January 2026.
+None cite each other. Read together, they sketch the state of the art for
+decentralized LLM inference from every angle except one, and the missing angle is
+the one PyrusLLM is built around.</p>
+
+<div class="note i">These are close reads, not abstracts: what each paper actually
+measured, where its numbers do and don't hold up, and — for each one — the specific
+design decisions it changes in PyrusLLM. Every page ends with concrete conclusions,
+not just a summary.</div>
+
+<h2 id="the-papers">The four papers</h2>
+<div class="cards two">
+  <a class="card link" href="research-polylink.html">
+    <div class="ico">&#128268;</div><b>PolyLink</b>
+    <p>PolyU Hong Kong + China Mobile HK, arXiv 2510.02395, Oct 2025. A decentralized
+    LLM inference marketplace with a trustless quality-verification protocol (TIQE)
+    and a three-role incentive model — the closest thing to PyrusLLM published as an
+    academic system, with a real 20-device deployment.</p>
+  </a>
+  <a class="card link" href="research-deserve.html">
+    <div class="ico">&#9889;</div><b>DeServe</b>
+    <p>UC Berkeley (Dawn Song's group), arXiv 2501.14784, Jan 2025. Gives up on
+    winning on latency and competes on offline batch throughput instead — 445 tok/s
+    for a 70B model, pipelined across a high-latency WAN, with an optimistic
+    verification scheme that costs one signature.</p>
+  </a>
+  <a class="card link" href="research-aeria.html">
+    <div class="ico">&#128176;</div><b>AERIA</b>
+    <p>University of Exeter + HUST, arXiv 2503.04521, in review at IEEE TMC. An
+    auction mechanism for edge inference pricing with proven truthfulness and
+    envy-freeness, clearing in ~3 milliseconds — small enough to run inside a
+    confidential enclave without discussion.</p>
+  </a>
+  <a class="card link" href="research-dcbm.html">
+    <div class="ico">&#128200;</div><b>DCBM</b>
+    <p>FLock.io + University of Oxford, arXiv 2601.09961, Jan 2026. A PID controller
+    for token buyback-and-burn, positioned to stabilize the token that pays for
+    all of the above — undercut by a simpler alternative the paper never
+    considers.</p>
+  </a>
+</div>
+
+<h2 id="synthesis">The synthesis, in one paragraph</h2>
+<p>The three papers that have to match a request to a machine <strong>all leave that
+role centralized</strong> — two admit it in writing. AERIA is the most revealing: it
+doesn't leave the central coordinator in by accident — the auctioneer <em>is</em> the
+design, and the paper details exactly what it needs to know to clear the market:
+budget, deadline, accuracy requirement, and which model each user wants. That isn't
+an accidental leak. It's the algorithm's required input. It can't be encrypted,
+because the algorithm has to read it in the clear. It can only be moved somewhere
+nobody watching can see it — which is what a confidential-compute enclave is for, and
+is the thesis PyrusLLM is built on.</p>
+
+<h2 id="map">Where the four line up</h2>
+<div class="tw"><table>
+<thead><tr><th></th><th>PolyLink</th><th>DeServe</th><th>AERIA</th><th>DCBM</th></tr></thead>
+<tbody>
+<tr><td>Layer</td><td>quality &amp; incentives</td><td>systems &amp; cost</td><td>price discovery</td><td>monetary policy</td></tr>
+<tr><td>Throughput / systems</td><td>weak (7 tok/s, sharded)</td><td><strong>strong (445 tok/s)</strong></td><td>n/a (CPU sim)</td><td>n/a</td></tr>
+<tr><td>Provider economics</td><td>inverted incentive</td><td><strong>real cost table</strong></td><td>reserve price + margin γ</td><td>n/a</td></tr>
+<tr><td>Quality / reputation</td><td><strong>TIQE, measured</strong></td><td>absent</td><td>declared σ, unverified</td><td>n/a</td></tr>
+<tr><td>Verification</td><td>committee, 30% permanent tax</td><td><strong>optimistic, ~0% tax</strong></td><td>absent</td><td>absent</td></tr>
+<tr><td>Price discovery</td><td>undefined δ</td><td>fixed reference price</td><td><strong>proven auction</strong></td><td>stabilizes the <em>unit</em></td></tr>
+<tr><td>Privacy</td><td>none</td><td>none (linkability is a stated feature)</td><td>none — defines what the auctioneer must see</td><td>n/a</td></tr>
+<tr><td>Decentralized matching</td><td>no (cloud API server)</td><td>no (admitted open problem)</td><td>no (the auctioneer <em>is</em> the design)</td><td>n/a</td></tr>
+<tr><td>Real deployment</td><td>20 devices, 4 cities</td><td>GCP east–west</td><td>simulation only</td><td>simulation only</td></tr>
+<tr><td>Public code</td><td>yes</td><td>yes</td><td>yes</td><td><strong>no</strong></td></tr>
+<tr><td>Applies to autoregressive LLMs</td><td>yes</td><td><strong>yes</strong></td><td>no — single-forward-pass cost model</td><td>n/a</td></tr>
+</tbody></table></div>
+
+<h2 id="sources">Sources</h2>
+<div class="tw"><table>
+<thead><tr><th>Paper</th><th>arXiv</th><th>Venue / date</th><th>PDF</th></tr></thead>
+<tbody>
+<tr><td>PolyLink</td><td>2510.02395v1</td><td>cs.CR, 1 Oct 2025</td><td><a href="../2510.02395v1.pdf">2510.02395v1.pdf</a></td></tr>
+<tr><td>DeServe</td><td>2501.14784v1</td><td>cs.DC, 4 Jan 2025</td><td><a href="../2501.14784v1.pdf">2501.14784v1.pdf</a></td></tr>
+<tr><td>AERIA</td><td>2503.04521v2</td><td>in review, IEEE Trans. Mobile Computing</td><td><a href="../2503.04521v2.pdf">2503.04521v2.pdf</a></td></tr>
+<tr><td>DCBM</td><td>2601.09961v1</td><td>cs.GT, 15 Jan 2026</td><td><a href="../2601.09961v1.pdf">2601.09961v1.pdf</a></td></tr>
+</tbody></table></div>
+
+<h2 id="next">Read next</h2>
+<div class="cards two">
+  <a class="card link" href="research-decisions.html">
+    <div class="ico">&#127919;</div><b>What to build first</b>
+    <p>The synthesis across all four: what to implement first, the three decisions
+    that block everything else, and what not to build at all.</p>
+  </a>
+  <a class="card link" href="research-polylink.html">
+    <div class="ico">&#128220;</div><b>Start with PolyLink</b>
+    <p>The closest published system to PyrusLLM — start here for the most direct
+    comparisons.</p>
+  </a>
+</div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

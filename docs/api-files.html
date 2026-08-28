@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API — Files &amp; upstream — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/api-files.html">
+
+<article id="doc">
+<div class="crumb">Documentation / API reference</div>
+<h1>Files &amp; upstream</h1>
+<p class="lede">This node's Hyperdrive over HTTP, and the one door through which a
+prompt can leave the P2P network entirely.</p>
+
+<h2 id="ep-files">List files</h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/files</span><span class="auth">Bearer</span><a class="try" href="playground.html?ep=files">Try it &rarr;</a></div>
+<p>Lists this node's Hyperdrive. Pass <code>?peerKey=&lt;hex&gt;</code> to list a
+peer's drive instead — without it you always get the local one, whichever node you
+meant.</p>
+
+<h2 id="ep-upload">Upload and fetch</h2>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/files/upload?name=&lt;name&gt;</span><span class="auth">Bearer</span></div>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/files/fetch</span><span class="auth">Bearer</span></div>
+<p>Upload sends the raw body as the file content. Fetch downloads a
+<code>qvac://</code> link to this node's disk — the API equivalent of
+<a href="cli-files.html#cli-fetch"><code>pyrusllm fetch</code></a>.</p>
+<div class="note w">Both write to this node's disk, so they generate a
+<code>curl</code> command in the playground rather than executing — see
+<a href="playground-safety.html">what the playground restricts</a>.</div>
+
+<h2 id="ep-upstream">External assistant</h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/upstream</span><span class="auth">Bearer</span><a class="try" href="playground.html?ep=upstream">Try it &rarr;</a></div>
+<p>Lists the configured upstreams and whether each has its credential. Configuring a
+new upstream or changing a credential is <strong>not</strong> possible over HTTP —
+that lives in <code>upstreams.json</code> on the operator's disk.</p>
+
+<h2 id="ep-optin">Opt in or out</h2>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/upstream/opt-in</span><span class="auth">Bearer</span></div>
+<pre><code>{ <span class="c-kw">"enabled"</span>: <span class="c-kw">true</span> }</code></pre>
+<div class="note b"><b>This is the one path where a prompt leaves the P2P network</b>
+and goes to a company's API, which sees it, may log it, and bills it. <strong>Off by
+default.</strong> Even switched on it only competes when nobody local or on the
+network has capacity, and never when the request asks to stay on this machine.</div>
+<div class="note i">Turning it on here does not write the config file: on restart it
+goes back to whatever <code>upstreams.json</code> says.</div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

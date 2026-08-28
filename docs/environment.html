@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Environment &amp; models — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/environment.html">
+
+<article id="doc">
+<div class="crumb">Documentation / Reference</div>
+<h1>Environment &amp; models</h1>
+
+<h2 id="env">Environment</h2>
+<div class="tw"><table>
+<thead><tr><th>Variable</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>PYRUS_WALLET_PASSPHRASE</code></td><td>Encrypts the wallet seed. Required by <code>wallet --create</code></td></tr>
+<tr><td><code>PYRUS_WALLET_RED</code></td><td>Pins the network. When set, the panel's network selector is disabled</td></tr>
+<tr><td><code>PYRUS_WALLET_RPC</code></td><td>Override the RPC endpoint</td></tr>
+<tr><td><code>PYRUS_X402_FACILITATOR</code></td><td>x402 facilitator URL</td></tr>
+<tr><td><code>PYRUS_X402_PLASMA_ASSET_VERIFICADO</code></td><td>Must be <code>1</code> to charge on Plasma mainnet — a human step: verify the USD₮0 contract on the explorer first</td></tr>
+</tbody></table></div>
+<p>All of these can live in a <code>.env</code> in the storage directory.</p>
+
+<h2 id="models">Models</h2>
+<p>Aliases accepted by <code>--model</code> and by the <code>model</code> field:</p>
+<div class="pills">
+  <span class="pill">smol</span>
+  <span class="pill on">llama1b <em>(default)</em></span>
+  <span class="pill">qwen1_7b</span>
+  <span class="pill">qwen4b</span>
+  <span class="pill">qwen8b</span>
+  <span class="pill">gemma4b</span>
+</div>
+<p style="margin-top:.9rem">An exact registry name also works. The catalog exposed by
+<a href="api-network.html#ep-manifest">/v1/swarm/manifest</a> marks each model with
+<code>fits</code>, computed against this machine's RAM.</p>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

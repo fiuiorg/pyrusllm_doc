@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLI — wallet — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/cli-wallet.html">
+
+<article id="doc">
+<div class="crumb">Documentation / CLI reference</div>
+<h1>CLI — wallet</h1>
+<p class="lede">Show, create or restore this node's payout wallet from the terminal.</p>
+
+<h2 id="cli-wallet"><code>pyrusllm wallet</code></h2>
+<pre><code>pyrusllm wallet [<span class="c-fl">--create</span> | <span class="c-fl">--restore</span> <span class="c-st">"&lt;24 words&gt;"</span>]</code></pre>
+<div class="tw"><table>
+<thead><tr><th>Flag</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><em>(none)</em></td><td>Show the payout address, or say there is no wallet yet</td></tr>
+<tr><td><code>--create</code></td><td>Generate a new wallet for this node</td></tr>
+<tr><td><code>--restore &lt;phrase&gt;</code></td><td>Restore from the 24 words of a backup</td></tr>
+</tbody></table></div>
+<div class="note b"><b>The 24 words are shown once.</b> Write them down. Without them
+<em>and</em> without the keystore, the wallet is lost. The seed is stored encrypted with
+<code>PYRUS_WALLET_PASSPHRASE</code>; if that <code>.env</code> lives next to the
+keystore, the encryption protects against a backup or a repo — not against somebody
+who already has access to the machine.</div>
+
+<div class="note w"><b>Never keep a recovery phrase in a plain text file next to files
+you share.</b> A 24-word seed in a <code>.txt</code> on the desktop, inside a folder you
+hand to someone else or sync anywhere, is a live risk — treat it the same as the
+wallet itself.</div>
+
+<p>See also <a href="api-wallet.html">the wallet API routes</a> — the CLI command and
+<code>/v1/wallet/*</code> operate on the same keystore, and only the node process ever
+opens the seed.</p>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

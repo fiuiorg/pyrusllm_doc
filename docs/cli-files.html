@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLI — files over P2P — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/cli-files.html">
+
+<article id="doc">
+<div class="crumb">Documentation / CLI reference</div>
+<h1>CLI — files over P2P</h1>
+<p class="lede">Publish and pull files through the same Hyperdrive every node
+already runs — no separate file server.</p>
+
+<h2 id="cli-send"><code>pyrusllm send</code></h2>
+<p>Publish a file or folder into this node's Hyperdrive and announce it on the DHT.
+Prints a <code>qvac://</code> link.</p>
+<pre><code>pyrusllm send &lt;path&gt; [<span class="c-fl">--as</span> &lt;name&gt;]</code></pre>
+<div class="note w"><b>The process stays running on purpose.</b> Hypercore is not
+store-and-forward: there is no server holding the file. The bytes come out of your
+machine, so it must stay on while the other side downloads.</div>
+
+<h2 id="cli-fetch"><code>pyrusllm fetch</code></h2>
+<p>Download a file published by another machine.</p>
+<pre><code>pyrusllm fetch qvac://&lt;key&gt;/&lt;path&gt; [<span class="c-fl">--out</span> &lt;dir&gt;] [<span class="c-fl">--timeout</span> &lt;s&gt;]</code></pre>
+<div class="note g">Every block is verified against the drive's merkle root as it
+arrives, so a file tampered with midway cannot complete. What the key does
+<strong>not</strong> prove is <em>whose</em> it is — that depends on the channel the link
+arrived through.</div>
+
+<h2 id="cli-files"><code>pyrusllm files</code></h2>
+<p>List the files published by this node, or by a peer.</p>
+<pre><code>pyrusllm files [<span class="c-fl">--link</span> qvac://…] [<span class="c-fl">--timeout</span> &lt;s&gt;]</code></pre>
+<p>With <code>--link</code> it lists a remote drive without downloading the content:
+Hyperdrive metadata replicates separately from the blobs.</p>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

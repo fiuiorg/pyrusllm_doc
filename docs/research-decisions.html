@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What to build first — Research — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/research-decisions.html">
+
+<article id="doc">
+<div class="crumb">Research / Synthesis</div>
+<h1>What to build first</h1>
+<p class="lede">The synthesis across
+<a href="research-polylink.html">PolyLink</a>, <a href="research-deserve.html">DeServe</a>,
+<a href="research-aeria.html">AERIA</a> and <a href="research-dcbm.html">DCBM</a>:
+one build item above everything else, three decisions that block the rest, and a
+short list of things not to build.</p>
+
+<h2 id="synthesis">The synthesis, in one paragraph</h2>
+<p>Four independent groups, four disciplines, none citing each other — and the three
+that have to match a request to a machine <strong>all leave that role
+centralized</strong>, two admitting it in writing. AERIA is the most revealing: it
+doesn't leave the central coordinator in by accident — the auctioneer <em>is</em> the
+design, and the paper details exactly what it needs to know to function: budget,
+deadline, accuracy requirement, and which model each user wants. Not an accidental
+leak — it's the algorithm's required input. It can't be encrypted, because the
+algorithm has to read it. It can only be moved somewhere nobody watching can see it.</p>
+
+<h2 id="first">Build first: the signed inference receipt</h2>
+<p>No hesitation on this one. Every provider signs every response:
+<code>pubkey</code>, <code>model_id</code> from the manifest, <code>hash(prompt)</code>,
+<code>hash(output)</code>, tokens in/out, quantization, timestamp, nonce.</p>
+<p>Three reasons, in order:</p>
+<ol>
+<li><strong>It's the atom the other five things depend on.</strong> Billing (the
+tokens), verification (the hashes), reputation (the per-provider series),
+arbitration (non-repudiation), auction clearing (knowing what was actually
+delivered). <a href="research-deserve.html#verification">DeServe</a> calls it the
+only per-request cost of its entire optimistic scheme: one signature.</li>
+<li><strong>It costs almost nothing.</strong> One Ed25519 signature per request. No
+enclave, no blockchain, no token needed to start.</li>
+<li><strong>It's the one piece that can't be added later.</strong> Requests that
+already happened can't be retroactively signed. Every day without this is
+unauditable history that doesn't come back.</li>
+</ol>
+<p>After that, in order: measurement shaped the way it will live inside the enclave
+→ model-identity probes (canaries) → a per-provider reserve price → windowed
+clearing inside the enclave → cascade routing. The first four are inputs to the
+fifth — doing them now means the day confidential matching ships, the enclave
+already has everything it needs.</p>
+
+<div class="note g"><b>One callout worth stating explicitly:</b> canaries only work
+well in an architecture like this one. PolyLink can't inject them undetectably
+because its API server is visible and the worker knows exactly where every request
+comes from. When the enclave does the matching and decouples identity, a provider
+cannot tell a probe from a real user — <strong>the privacy layer is what makes
+verification possible.</strong> Not a happy coincidence — a design argument worth
+writing down explicitly.</div>
+
+<h2 id="decide">What has to be decided</h2>
+<p><strong>Three block everything else:</strong></p>
+
+<div class="tw"><table>
+<thead><tr><th></th><th>Decision</th><th>Recommendation</th></tr></thead>
+<tbody>
+<tr id="d1">
+  <td><strong>D1</strong></td>
+  <td>What's the operating economy denominated in?</td>
+  <td><strong>Separate the payment rail (stablecoin) from the incentive asset
+  (token).</strong> The entire DCBM apparatus exists to solve a problem created by
+  denominating the real economy in a volatile asset — and the paper never considers
+  the simpler alternative. With this split, a PID controller is never needed just to
+  keep the lights on. See <a href="research-dcbm.html#objection">DCBM →
+  the deeper objection</a>.</td>
+</tr>
+<tr id="d2">
+  <td><strong>D2</strong></td>
+  <td>Who is the target provider?</td>
+  <td><strong>Already-idle hardware</strong>, not investors buying hardware to join.
+  DeServe's math: buying a GPU for this never pays back (~4.7-year break-even at
+  mining-opportunity-cost pricing). See <a href="research-deserve.html#economics">DeServe
+  → the economics</a>.</td>
+</tr>
+<tr id="d3">
+  <td><strong>D3</strong></td>
+  <td>Optimistic verification, or a committee?</td>
+  <td><strong>Optimistic, with the enclave as arbiter.</strong> PolyLink permanently
+  reserves 30% of all revenue for validators, directly contradicting "the margin
+  stays with whoever contributes the compute." DeServe leaves arbitration pluggable
+  because it has nothing to fill it with. An enclave-based design does. See
+  <a href="research-deserve.html#verification">DeServe → verification</a>.</td>
+</tr>
+</tbody></table></div>
+
+<p><strong>Four more are design-level, not blocking:</strong></p>
+<ul>
+<li><strong>One lane or two?</strong> Two — an online lane and a batch lane, and the
+confidential-matching lane launches in batch first, where a few hundred milliseconds
+of enclave round trip is noise against an hours-long SLA. See
+<a href="research-deserve.html#takeaways">DeServe → takeaways</a>.</li>
+<li><strong>Does quality affect payment or routing?</strong> Routing, via an EWMA.
+PolyLink's 12% false-positive rate makes a per-request pay multiplier unworkable —
+see <a href="research-polylink.html#conclusions">PolyLink → conclusion 7</a>.</li>
+<li><strong>Is the unit FLOPS or tokens?</strong> Tokens and memory. AERIA's cost
+model assumes a single forward pass and doesn't transfer to autoregressive
+generation — see <a href="research-aeria.html#critiques">AERIA → critiques</a>.</li>
+<li><strong>What does the auction maximize?</strong> Decide, and publish it. With
+the auction running inside an enclave, this is the first time that declaration can
+be <em>verifiable</em> instead of a promise — see
+<a href="research-aeria.html#critiques">AERIA → critiques</a>.</li>
+</ul>
+
+<h2 id="not-build">What not to build</h2>
+<div class="cards two">
+  <div class="card">
+    <div class="ico">&#10060;</div><b>Naive cross-device sharding</b>
+    <p>7 tok/s on a 14B in PolyLink's own numbers. Route to whoever holds the whole
+    model instead.</p>
+  </div>
+  <div class="card">
+    <div class="ico">&#10060;</div><b>A permanent validator committee</b>
+    <p>PolyLink's 30% permanent tax and inverted-quality incentive. Use optimistic
+    verification with the enclave as arbiter.</p>
+  </div>
+  <div class="card">
+    <div class="ico">&#10060;</div><b>PID stabilization of the token</b>
+    <p>DCBM's own Theorem IV.1 forbids it at pre-seed liquidity depth. A later-phase
+    problem, not a now problem — and denominating the operating economy in
+    stablecoin avoids needing it at all.</p>
+  </div>
+  <div class="card">
+    <div class="ico">&#10060;</div><b>ZK proofs of inference</b>
+    <p>zkLLM: 803 seconds per proof in the numbers PolyLink itself cites. Fails
+    DeServe's own rejection criteria — see below.</p>
+  </div>
+  <div class="card">
+    <div class="ico">&#10060;</div><b>A serving engine from scratch</b>
+    <p>DeServe's pipeline + KV-offload engine already exists
+    (<code>github.com/CoLearn-Dev/deserve</code>) as a starting point for the batch
+    lane. Verify it's still usable before relying on it — it's January 2025 research
+    code.</p>
+  </div>
+</div>
+
+<div class="note i">Adopt <a href="research-deserve.html#verification">DeServe's
+three rejection criteria</a> as a permanent filter for any verification mechanism
+under consideration: does it load heavy compute onto the provider? Does it put data
+on-chain? Does it let anyone challenge at will? A "yes" to any one disqualifies it.
+That filter alone eliminates zkLLM, opML, and spML.</div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

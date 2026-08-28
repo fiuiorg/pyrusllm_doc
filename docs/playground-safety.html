@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What the playground restricts — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/playground-safety.html">
+
+<article id="doc">
+<div class="crumb">API Playground</div>
+<h1>What the playground restricts, and why</h1>
+<p class="lede">The <a href="playground.html">console</a> talks to a real node —
+possibly a production one, like k16. The rule that decides what runs live is simple:
+<strong>a route executes in the browser only if failing to notice a mistake there
+costs nothing.</strong> Everything else renders a <code>curl</code> command instead,
+so you read it before it runs anywhere.</p>
+
+<h2 id="rule">The rule</h2>
+<div class="cards two">
+  <div class="card">
+    <div class="ico">&#9989;</div><b>Executes live</b>
+    <p>Every <code>GET</code> — nothing a <code>GET</code> does is supposed to change
+    state — plus the two <code>POST</code> routes whose worst case is cheap and
+    reversible: creating a chat completion, and creating a new API key.</p>
+  </div>
+  <div class="card">
+    <div class="ico">&#128274;</div><b>curl only</b>
+    <p>Anything that revokes access, moves funds, changes what network or model the
+    node is on, writes a file to disk, or turns on sending prompts to a third-party
+    API. The console builds the exact command and you run it in your own terminal.</p>
+  </div>
+</div>
+
+<h2 id="table">Every route, by policy</h2>
+<div class="tw"><table>
+<thead><tr><th>Route</th><th>Policy</th><th>Reason</th></tr></thead>
+<tbody>
+<tr><td><code>GET /v1/models</code></td><td>Live</td><td>Read-only, no key needed</td></tr>
+<tr><td><code>POST /v1/chat/completions</code></td><td>Live</td><td>Worst case: one paid or free completion, same as using the chat panel</td></tr>
+<tr><td><code>GET /v1/nodes</code></td><td>Live</td><td>Read-only</td></tr>
+<tr><td><code>GET /v1/agent</code></td><td>Live</td><td>Read-only, no key needed</td></tr>
+<tr><td><code>POST /v1/agent/launch</code></td><td>curl only</td><td>Changes whether this machine is on the P2P network</td></tr>
+<tr><td><code>GET /v1/swarm/manifest</code></td><td>Live</td><td>Read-only</td></tr>
+<tr><td><code>POST /v1/swarm/manifest</code></td><td>curl only</td><td>Re-signs the manifest and can trigger a real model load</td></tr>
+<tr><td><code>GET /v1/routing-log</code></td><td>Live</td><td>Read-only</td></tr>
+<tr><td><code>GET /v1/keys</code></td><td>Live</td><td>Read-only (already needs a key to call)</td></tr>
+<tr><td><code>POST /v1/keys</code></td><td>Live</td><td>Additive and reversible — a new key can be revoked</td></tr>
+<tr><td><code>DELETE /v1/keys/:id</code></td><td>curl only</td><td>Revokes access; could be the key the console itself is using</td></tr>
+<tr><td><code>POST /v1/keys/revoke-all</code></td><td>curl only</td><td>Revokes every key, including the panel's own</td></tr>
+<tr><td><code>GET /v1/quota</code>, <code>/v1/budget</code>, <code>/v1/budget/report</code></td><td>Live</td><td>Read-only</td></tr>
+<tr><td><code>GET /v1/receipts/:id</code></td><td>Live</td><td>Read-only, no key needed</td></tr>
+<tr><td><code>GET /v1/wallet</code>, <code>/v1/wallet/balances</code>, <code>/v1/wallet/history</code></td><td>Live</td><td>Read-only</td></tr>
+<tr><td><code>POST /v1/wallet/send/quote</code>, <code>/v1/wallet/send</code></td><td>curl only</td><td>Moves real funds; <code>send</code> needs <code>confirmar: "MAINNET"</code> on mainnet</td></tr>
+<tr><td><code>POST /v1/wallet/create</code></td><td>curl only</td><td>Generates key material; the 24-word phrase is shown once</td></tr>
+<tr><td><code>POST /v1/wallet/network</code></td><td>curl only</td><td>Changes which chain the node talks to; requires a restart</td></tr>
+<tr><td><code>POST</code> / <code>DELETE /v1/wallet/tokens</code></td><td>curl only</td><td>Edits what the wallet watches</td></tr>
+<tr><td><code>GET /v1/files</code></td><td>Live</td><td>Read-only</td></tr>
+<tr><td><code>POST /v1/files/upload</code>, <code>/v1/files/fetch</code></td><td>curl only</td><td>Writes bytes to this node's disk and Hyperdrive</td></tr>
+<tr><td><code>GET /v1/upstream</code></td><td>Live</td><td>Read-only</td></tr>
+<tr><td><code>POST /v1/upstream/opt-in</code></td><td>curl only</td><td>The one switch that can send a prompt to a third-party API</td></tr>
+</tbody></table></div>
+
+<h2 id="cors">CORS: why a live request might fail anyway</h2>
+<p>The console runs as a page on <em>this</em> origin and calls the Base URL you
+give it — typically your node on the LAN, such as k16. That is a cross-origin
+request by definition, and the browser will only let the response through if the
+node's gateway sends back an <code>Access-Control-Allow-Origin</code> header that
+permits it.</p>
+<div class="note w">If <a href="playground.html">the console</a> reports a network
+error rather than a status code, this is almost always why. Two ways to fix it:</div>
+<ul>
+<li>Open this documentation site <em>from the same origin as the node</em> — e.g.
+served by <code>pyrusllm serve</code> itself, or reverse-proxied alongside it.</li>
+<li>Configure the gateway to send a permissive
+<code>Access-Control-Allow-Origin</code> for the routes above. Until that is in
+place, every request generated here still works as a <code>curl</code> command,
+which is not subject to CORS.</li>
+</ul>
+
+<h2 id="k16">Testing against k16</h2>
+<p>Set Base URL to wherever k16's gateway listens — its LAN address and port, e.g.
+<code>http://k16.local:8787</code> or an IP:port — and paste in a key created from
+that node's <a href="panels.html">My Node panel</a> or via
+<a href="api-keys.html#ep-keys-new">POST /v1/keys</a> run directly against it. The
+connection fields are saved only in this browser's <code>localStorage</code>, so the
+key never leaves your machine except in the request itself.</p>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

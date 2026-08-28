@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLI — global flags &amp; core commands — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/cli.html">
+
+<article id="doc">
+<div class="crumb">Documentation / CLI reference</div>
+<h1>CLI — global flags &amp; core commands</h1>
+<p class="lede">Run <code>pyrusllm --help</code> to list every command, or
+<code>pyrusllm &lt;command&gt; --help</code> for one command's full detail.</p>
+
+<h2 id="cli">Global flags</h2>
+<pre><code>pyrusllm [flags] [command]</code></pre>
+<div class="tw"><table>
+<thead><tr><th>Flag</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>--version</code>, <code>-v</code></td><td>Print the current version</td></tr>
+<tr><td><code>--storage &lt;dir&gt;</code></td><td>Custom storage directory</td></tr>
+<tr><td><code>--no-updates</code></td><td>Disable OTA updates for this run</td></tr>
+<tr><td><code>--port &lt;n&gt;</code></td><td>App HTTP port (default 8787)</td></tr>
+<tr><td><code>--no-serve</code></td><td>Only the OTA updater, without starting the app</td></tr>
+<tr><td><code>--no-open</code></td><td>Do not open the browser on start</td></tr>
+<tr><td><code>--update-delay &lt;ms&gt;</code></td><td>OTA jitter window in ms (default 10000)</td></tr>
+</tbody></table></div>
+<div class="note w"><b>One process per storage directory.</b> The Corestore takes a
+lock on it. A second node against the same <code>--storage</code> fails with
+"File descriptor could not be locked" — use a different directory, or
+<code>--no-store</code>.</div>
+
+<h2 id="cli-prompt"><code>pyrusllm prompt</code></h2>
+<p>Answer a prompt with 100% local inference. Loads an LLM with QVAC and answers
+without leaving this machine.</p>
+<pre><code>pyrusllm prompt <span class="c-st">"&lt;prompt&gt;"</span> [flags]</code></pre>
+<div class="tw"><table>
+<thead><tr><th>Argument / flag</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>&lt;prompt&gt;</code></td><td>The text to answer, or <code>-</code> to read it from stdin</td></tr>
+<tr><td><code>--model &lt;alias&gt;</code></td><td>Model alias or exact registry name (default <code>llama1b</code>)</td></tr>
+<tr><td><code>--ctx &lt;n&gt;</code></td><td>Context size</td></tr>
+<tr><td><code>--gpu-layers &lt;n&gt;</code></td><td>Layers to send to the GPU. <code>0</code> = all CPU</td></tr>
+<tr><td><code>--no-download</code></td><td>Fail instead of downloading the weights when not cached</td></tr>
+<tr><td><code>--quiet</code>, <code>-q</code></td><td>Print only the answer, no diagnostics or measurements</td></tr>
+</tbody></table></div>
+<div class="note i"><b>Use <code>-</code> on Windows for non-ASCII prompts.</b> The
+standalone binary receives argv in the ANSI codepage, which mangles accented
+characters. stdin is a byte stream and does not go through that conversion:
+<code>echo "Respondé…" | pyrusllm prompt -</code></div>
+<div class="note w">On a weak iGPU (Intel UHD 620), <code>--gpu-layers 0</code> measured
+<strong>5× faster</strong> than letting the SDK decide. See <code>NOTES.md</code>.</div>
+
+<h2 id="cli-serve"><code>pyrusllm serve</code></h2>
+<p>Start the OpenAI-compatible gateway and the browser panels. <strong>This is the
+command that turns on the HTTP API.</strong></p>
+<pre><code>pyrusllm serve [flags]</code></pre>
+<div class="tw"><table>
+<thead><tr><th>Flag</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>--port &lt;n&gt;</code></td><td>Gateway HTTP port (default 8787)</td></tr>
+<tr><td><code>--swarm</code></td><td>Join the P2P topic and populate the registry with verified peers</td></tr>
+<tr><td><code>--operator &lt;name&gt;</code></td><td>Operator name announced in the manifest</td></tr>
+<tr><td><code>--demo</code></td><td>Populate the registry with simulated nodes (1 real + 3 mocks)</td></tr>
+<tr><td><code>--no-store</code></td><td>Do not open the Hyperbee/Hyperdrive: no persistence, no files</td></tr>
+<tr><td><code>--gpu-layers &lt;n&gt;</code></td><td>Layers to send to the real node's GPU. <code>0</code> = all CPU</td></tr>
+</tbody></table></div>
+<div class="note i">Without <code>--swarm</code> the gateway serves the panels and the
+API but stays off the network: the registry starts <strong>empty</strong> and requests
+for a model nobody serves return a clear "no nodes serving that model" error. That is
+the honest state, not a bug.</div>
+
+<h2 id="cli-peers"><code>pyrusllm peers</code></h2>
+<p>Join the P2P topic and list the peers with a verified manifest, without starting
+the gateway. Reports join → first peer and join → first verified manifest timings.</p>
+<pre><code>pyrusllm peers [flags]</code></pre>
+<div class="tw"><table>
+<thead><tr><th>Flag</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>--operator &lt;name&gt;</code></td><td>Operator name announced in the manifest</td></tr>
+<tr><td><code>--timeout &lt;s&gt;</code></td><td>Exit after N seconds (default: never exits, Ctrl+C)</td></tr>
+<tr><td><code>--expect &lt;n&gt;</code></td><td>Exit code 1 if fewer than N verified peers on exit</td></tr>
+</tbody></table></div>
+<div class="note w"><b>Discovery takes ~17 s.</b> Run this on both machines with
+<strong>overlapping windows</strong> — a short <code>--timeout</code> on one side while
+the other has not joined yet reports 0 peers and looks like a network fault when it is
+not.</div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

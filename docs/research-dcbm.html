@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DCBM — Research — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/research-dcbm.html">
+
+<article id="doc">
+<div class="crumb">Research / Paper notes</div>
+<h1>DCBM</h1>
+<p class="lede"><em>"A Control Theoretic Approach to Decentralized AI Economy
+Stabilization via Dynamic Buyback-and-Burn Mechanisms."</em> FLock.io + University of
+Oxford (+ Manchester, Newcastle). arXiv 2601.09961v1, cs.GT, 15 Jan 2026.
+<a href="../2601.09961v1.pdf">PDF</a>. Contact: <code>hello@flock.io</code>.</p>
+
+<p>This one closes the map from a different angle: <strong>it is not about
+inference at all.</strong> The other three discuss how to serve, how to verify, and
+how to price. This one discusses the <strong>monetary policy of the token</strong>
+everything above gets paid in — directly relevant to a provider earning $QVAC.</p>
+
+<h2 id="what">What it proposes</h2>
+<p><strong>DCBM</strong> (Dynamic-Control Buyback Mechanism): treat the token
+economy as a dynamical system and regulate it with a <strong>PID controller</strong>,
+instead of the static buyback-and-burn rules the rest of the industry uses.</p>
+<p>The starting argument is sound: static buyback is <strong>procyclical</strong>. It
+buys back a fixed % of revenue, so it buys a lot during a bull market (high revenue)
+and little during a bear market — precisely when support is needed most. And
+threshold rules ("buy if price drops X%") are bang-bang control, which induces
+oscillation.</p>
+
+<h2 id="mechanism">The mechanism</h2>
+<p>State: <code>S_k = [P_k, P̄_k, T_k]</code> = token TWAP, target price (EMA),
+treasury (in stablecoin). Error: <code>e_k = ln P̄_k − ln P_k</code>. Positive =
+undervalued = needs support.</p>
+<p><strong>Control law</strong> with clamped integration (the integral term only
+accumulates while the treasury isn't saturated, to prevent windup):</p>
+<pre><code>u_k = K_p·e_k + K_i·Σ ê_j·Δt + K_d·(e_k − e_{k−1})/Δt</code></pre>
+<p><strong>Sigmoid actuator with a "circuit breaker" γ:</strong></p>
+<pre><code>J_k = T_k · γ · tanh(max(0, u_k))</code></pre>
+<p><strong>Treasury:</strong> <code>T_{k+1} = max(0, T_k + R_acc(k) − J_k − C_ops)</code></p>
+<p><strong>Plant</strong> (constant-product AMM, <code>x·y = K</code>). Linearized in
+logs: <code>p_{k+1} = p_k + α_k·J_k + ξ_k</code>, with <code>α_k = 2/y_k</code>. The
+market is a discrete integrator whose gain is <strong>inversely proportional to
+liquidity depth.</strong></p>
+
+<h2 id="good-ideas">The two good ideas</h2>
+<p><strong>1. Asymptotic solvency.</strong> Since <code>J_k</code> is a
+<strong>multiplicative fraction</strong> of the treasury (<code>γ·tanh(·) &lt; 1</code>),
+in the worst case <code>T_{k+1} = T_k(1−λ_k)</code> with <code>λ_k &lt; 1</code> →
+geometric decay → the treasury trends toward zero but <strong>never reaches
+it</strong>. Bankruptcy is structurally impossible, not a calibration matter.</p>
+<p>The trick is one line and worth isolating on its own: <strong>spend a fraction,
+never an amount.</strong></p>
+<p><strong>2. "Whale in a Puddle" (Theorem IV.1).</strong> Since
+<code>α = 2/y_k</code>, as liquidity falls the plant gain tends to infinity. The Jury
+stability criteria give: <code>K_p + K_i &gt; 0</code>,
+<code>K_d &lt; (2−αK_p)/α</code>, <code>K_i &lt; (4−2αK_p)/α</code> — the stability
+region <strong>shrinks as the pool dries up.</strong> In plain terms: <strong>any
+price-support mechanism becomes unstable in a thin market.</strong></p>
+<p>This theorem is the one that applies most directly right now — and argues
+<em>against</em> adopting any of this today. More on that below.</p>
+
+<h2 id="numbers">The numbers</h2>
+<p>Table I (6 scenarios × 6 models), high-volatility regime:</p>
+<div class="tw"><table class="num">
+<thead><tr><th>Model</th><th>σ_P ↓</th><th>Churn ↓</th><th>Gas ↓</th></tr></thead>
+<tbody>
+<tr><td>No Buyback</td><td>0.89</td><td>28.4%</td><td>–</td></tr>
+<tr><td>Fixed-Rate</td><td>0.75</td><td>24.2%</td><td>≈21k</td></tr>
+<tr><td>Threshold</td><td>0.55</td><td>19.5%</td><td>≈15k</td></tr>
+<tr><td>RL (PPO)</td><td>0.45</td><td>11.5%</td><td><strong>≈720k</strong></td></tr>
+<tr><td>MPC (Oracle)</td><td><strong>0.26</strong></td><td><strong>7.2%</strong></td><td><strong>&gt;40M</strong></td></tr>
+<tr><td><strong>DCBM</strong></td><td>0.30</td><td>8.1%</td><td><strong>≈28k</strong></td></tr>
+</tbody></table></div>
+<p><strong>The column that decides is the last one.</strong> MPC beats DCBM on
+<em>every</em> stability metric and costs <strong>over 40 million gas</strong> —
+unexecutable on-chain. RL comes close at 720k, and is a black box. DCBM captures
+~90% of MPC's benefit at ~0.1% of the cost. The paper's real contribution isn't "PID
+is optimal" — it's <strong>"PID is the best thing that fits the execution
+budget."</strong></p>
+<p>Countercyclical treasury: in a bear scenario, Fixed-Rate contracts 12.4% while
+DCBM contracts only 1.8%; in a bull scenario, DCBM accumulates 11.2% instead of
+spending.</p>
+
+<p><strong>Ablation (Table II)</strong> — textbook, and confirms each term does its
+job: P-only leaves 4.2% permanent error; PI-only removes it (0.1%) but introduces
+25.4% overshoot; PD-only is fastest (85 blocks) but doesn't correct drift; full PID
+gives the best MSE (0.008).</p>
+
+<p><strong>Adversarial (Table III)</strong> — maps ML attacks onto economic
+manipulation (FGSM = flash crash, PGD = sustained manipulation, C&amp;W = minimum-cost
+saturation):</p>
+<div class="tw"><table class="num">
+<thead><tr><th>Defense</th><th>ASR @ε=1%</th><th>Treasury drain</th></tr></thead>
+<tbody>
+<tr><td>Threshold</td><td>88.4%</td><td>22.1%</td></tr>
+<tr><td>Threshold @ε=5% (PGD)</td><td><strong>100%</strong></td><td><strong>72.3% — insolvent</strong></td></tr>
+<tr><td>PID-Standard</td><td>42.1%</td><td>8.5%</td></tr>
+<tr><td>PID-Standard @ε=5% (PGD)</td><td><strong>94.1%</strong></td><td><strong>48.2%</strong></td></tr>
+<tr><td>PID-AdvTrain</td><td>12.5%</td><td>3.2%</td></tr>
+<tr><td><strong>PID-Cert</strong></td><td><strong>4.2%</strong></td><td><strong>1.2%</strong></td></tr>
+</tbody></table></div>
+<p>Two readings that matter. One: <strong>an un-hardened PID is still
+drainable</strong> — 94.1% success rate at a 5% budget. Two, and this is the
+transferable one: <strong>PID-Cert (hard Lipschitz bounds + saturation) beats
+PID-AdvTrain (learned robustness).</strong> Structural constraints beat well-tuned
+parameters, under adversarial conditions.</p>
+
+<h2 id="critiques">Critiques — and here they're serious</h2>
+<p><strong>1. Section V is written in future tense.</strong> Verbatim: "We will use a
+dual-data approach," "We will implement and simulate five baseline models," "The
+main experiments will involve running the simulation," "We will use Monte Carlo
+methods, running each scenario 1,000 times." Section VI then presents results as
+fait accompli. The methodology never converted from a proposal into a report.</p>
+<p><strong>2. It contradicts itself on how many baselines were run.</strong>
+§V.B: "five baseline models." §V.D: "each model (2 baselines, 1 proposed)."
+§VI.A: "against three baselines." Table I: five. Four different figures, in one
+paper.</p>
+<p><strong>3. No code.</strong> PolyLink published a repo. DeServe published a
+repo. AERIA published a repo. This one publishes nothing — every number comes from a
+simulator that doesn't exist publicly.</p>
+<p><strong>4. The promised "real data integration" never appears.</strong>
+Hugging Face data and Bittensor/Render prices are announced; no figure, table, or
+result in the results section ever cites a real data point. Everything is synthetic
+jump-diffusion.</p>
+<p><strong>5. Table III is too clean.</strong> A perfect monotonic hierarchy across
+4 defenses × 3 attacks × 3 budgets, no inversions, no noise, and — unlike Table I —
+no confidence intervals. Real adversarial sweeps don't come out this tidy.</p>
+<p><strong>6. The abstract's headline 66% is measured against doing nothing.</strong>
+"reduced price volatility by approximately 66% compared to the No Buyback baseline":
+0.89 → 0.30. Against the realistic baseline (Threshold, 0.55), the improvement is
+<strong>46%</strong>. The abstract leads with the straw-man comparison. (The churn
+figure, 19.5% → 8.1%, is correctly measured against Threshold.)</p>
+<p><strong>7. Undisclosed conflict of interest.</strong> The first affiliation is
+<strong>FLock.io</strong>, a decentralized-AI company with its own token, and the
+paper's contact is its corporate address. A paper concluding that decentralized-AI
+tokens need an active buyback-and-burn stabilizer, signed by an issuer of one, has a
+stake in that conclusion. No competing-interests statement.</p>
+<p><strong>8. Nobody mentions the regulatory elephant.</strong> A treasury
+systematically buying back its own token to support the price, funded by protocol
+revenue, is — under nearly any securities framework — exactly the kind of activity
+that draws scrutiny. The paper brushes the topic once ("disclosure and market
+integrity") and moves on.</p>
+
+<h2 id="objection">The deeper objection: the problem is self-inflicted</h2>
+<p>The entire motivation is: <em>providers need stable income and users need stable
+cost, therefore stabilize the token.</em></p>
+<p>There's a simpler answer the paper <strong>never considers</strong>:
+<strong>denominate in stablecoin.</strong></p>
+<p>If the provider is paid in USDC and the user pays in USDC, native-token volatility
+is <strong>irrelevant to the operating economy</strong>. The entire DCBM apparatus
+exists to solve a problem created by the earlier decision to denominate the real
+economy in a volatile asset.</p>
+<p>PyrusLLM's own design already earns $QVAC per served request via an x402 payment —
+and x402 is a rail built for stablecoin payments. This paper forces an explicit
+design question: <strong>what's denominated in what.</strong></p>
+<div class="tw"><table>
+<thead><tr><th>Layer</th><th>Denomination</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><strong>Payment rail</strong> (what users pay, what providers are paid)</td><td><strong>stablecoin</strong></td><td>the provider plans capex/opex against their electricity bill, not the market</td></tr>
+<tr><td><strong>Incentive asset</strong> (staking, reputation bonds, slashing, governance, bootstrap subsidy)</td><td>native token</td><td>volatility is tolerable here, and the upside is the incentive</td></tr>
+</tbody></table></div>
+<p>Split this way, volatility hits the speculative layer, not the operational one,
+and <strong>a PID controller is never needed just to keep the lights on.</strong>
+This is the opposite conclusion from the paper's, and it looks like the correct one
+here.</p>
+<p><strong>And even a token with a stabilization layer couldn't work today anyway:
+Theorem IV.1 rules it out.</strong> Pre-seed, without liquidity,
+<code>α = 2/y_k</code> is huge → any controller lands in the unstable region. This
+mechanism is a later-phase problem, not a now problem. Knowing that in advance avoids
+building it too early — which is the mistake the paper's framing invites.</p>
+
+<h2 id="takeaways">What to take anyway</h2>
+<p><strong>1. "Spend a fraction, never an amount"</strong> — apply this to
+any treasury-funded program, not just tokens. A two-sided bootstrap subsidy (early
+providers need income before there's demand, demand needs providers before there's a
+reason to add hardware) should be a <strong>fraction of the treasury, never a fixed
+amount per provider.</strong> Consequences: the program <strong>cannot go
+broke</strong> (a structural guarantee, not a calibration), it <strong>self-throttles</strong>
+as reserves fall, and <strong>self-accelerates</strong> when they're full. Applicable
+today — no token, no blockchain, no PID. The single most useful idea in the paper.</p>
+<p><strong>2. A <code>C_ops</code> term in the conservation equation.</strong> Their
+correction to the "Treasury Paradox": models that assume the treasury grows on every
+inflow are wrong — fixed operating costs have to be subtracted. Any treasury model
+needs a <code>C_ops</code> term and a time-to-ruin figure — obvious once stated,
+systematically omitted elsewhere.</p>
+<p><strong>3. TWAP, never spot, for anything that moves money.</strong> A low-pass
+filter attenuates single-block manipulation by 1/N. This generalizes beyond price to
+<strong>any metric that conditions a payment</strong>, including reputation and
+quality scores — if a reputation score reads an instantaneous value it's manipulable;
+time-weight it. Connects back to the PolyLink flaw where validators earn more when
+quality falls.</p>
+<p><strong>4. Structural bounds, not calibrated parameters.</strong> PID-Cert &gt;
+PID-AdvTrain &gt; PID-Standard, and even PID-Standard drained at 94%. Apply the lesson
+to every parameter in the system — slashing rates, reputation decay, price limits,
+reward multipliers. <strong>Bound them by construction.</strong></p>
+<p><strong>5. Derivative on the measurement, not the error.</strong> Avoids
+"derivative kick," where the loop panics because the <em>target</em> changed rather
+than the <em>state</em>. Applies to any feedback loop — e.g. a reputation score
+shouldn't spike because the quality threshold moved.</p>
+<p><strong>6. Execution budget beats the theoretically best solution.</strong> MPC
+dominates on every metric and is unusable above 40M gas — the same shape as the
+enclave decision: the mechanism that fits the confidential-compute budget wins, not
+the theoretically optimal one. AERIA's 3 ms is this same argument seen from the other
+side.</p>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API — Network — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/api-network.html">
+
+<article id="doc">
+<div class="crumb">Documentation / API reference</div>
+<h1>Network</h1>
+<p class="lede">Who is on the swarm, whether this node has joined it, and what it
+routed.</p>
+
+<h2 id="ep-nodes">List nodes</h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/nodes</span><span class="auth">Bearer</span><a class="try" href="playground.html?ep=nodes">Try it &rarr;</a></div>
+<p>The rich marketplace view: operator, price, load, kind. Returns
+<code>{ nodes, swarm }</code>; <code>swarm</code> is <code>null</code> when this
+gateway has not joined the P2P network yet.</p>
+<div class="tw"><table>
+<thead><tr><th>Node kind</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>real</code></td><td>This machine</td></tr>
+<tr><td><code>peer</code></td><td>A genuinely remote node, discovered over the swarm, signed manifest verified</td></tr>
+<tr><td><code>mock</code></td><td>Simulated (<code>--demo</code>). Always labelled as such in the UI</td></tr>
+<tr><td><code>upstream</code></td><td>Reached over HTTP. May be a third-party API <em>or</em> a local engine — check <code>local</code></td></tr>
+<tr><td><code>known</code></td><td>In the directory, manifest verified once, but no socket now. Never a routing candidate</td></tr>
+</tbody></table></div>
+
+<h2 id="ep-agent">Agent status</h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/agent</span><span class="auth open">No key</span><a class="try" href="playground.html?ep=agent">Try it &rarr;</a></div>
+<p>Whether this machine has joined the network. Statuses: <code>offline</code>,
+<code>launching</code>, <code>live</code>, <code>error</code>. Also carries
+<code>canLaunch</code> — false when the gateway was started without swarm support.</p>
+
+<h2 id="ep-launch">Launch the agent</h2>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/agent/launch</span><span class="auth">Bearer</span></div>
+<p>Joins the P2P network at runtime — the API equivalent of restarting with
+<code>--swarm</code>. Requires a gateway started with launch support.</p>
+<div class="note w">Not offered live in the playground — it changes what your node is
+doing on the network. See <a href="playground-safety.html">what the playground
+restricts</a> for the <code>curl</code> version.</div>
+
+<h2 id="ep-manifest">Swarm manifest</h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/swarm/manifest</span><span class="auth">Bearer</span><a class="try" href="playground.html?ep=manifest">Try it &rarr;</a></div>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/swarm/manifest</span><span class="auth">Bearer</span></div>
+<p><code>GET</code> returns the signed manifest, the model catalog with a
+<code>fits</code> flag per model (does it fit in this machine's RAM), and
+<code>modelLoad</code> status. <code>POST</code> edits <code>displayName</code>,
+<code>tags</code>, <code>maxConcurrentRequests</code> or <code>modelId</code> and
+<strong>re-signs</strong>.</p>
+<div class="note w">Switching <code>modelId</code> triggers a real model load. It can
+take several seconds or fail for lack of memory, while the node keeps answering with
+the current model. On failure the current model is kept.</div>
+
+<h2 id="ep-log">Routing log</h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/routing-log</span><span class="auth">Bearer</span><a class="try" href="playground.html?ep=routinglog">Try it &rarr;</a></div>
+<p>Both directions of the exchange, separated by <code>kind</code>: <code>served</code>
+is what this node produced for a peer, <code>route</code> is what it asked of somebody
+else. Each entry carries tokens, TTFT, tok/s, the D25 prefill/decode split with its
+<code>tokensFuente</code> provenance, and <code>finishReason</code>.</p>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

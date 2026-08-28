@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Authentication — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/authentication.html">
+
+<article id="doc">
+<div class="crumb">Documentation / API basics</div>
+<h1>Authentication</h1>
+<p class="lede">Every API route except the three noted below requires a Bearer key.</p>
+
+<pre><code>Authorization: Bearer &lt;key&gt;</code></pre>
+
+<p>Keys are created per client so a single bot can be cut off without touching the
+rest. They are stored on the machine and <strong>survive a restart</strong> — they have
+to: the spend cap is counted per key, and a registry that reset with the process
+would be a cap you could clear by restarting the node.</p>
+
+<h2 id="no-key">Routes that need no key</h2>
+<div class="tw"><table>
+<thead><tr><th>Route</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><code>GET /v1/models</code></td><td>An OpenAI client must discover the catalog before it has a key. The data is sanitised instead — no operator, no pricing.</td></tr>
+<tr><td><code>GET /v1/receipts/:id</code></td><td>Whoever paid through a 402 has no key by definition. Demanding one would leave them unable to audit what they paid for.</td></tr>
+<tr><td><code>GET /v1/keys/panel</code></td><td>The bootstrap the browser panel uses to obtain its own key.</td></tr>
+</tbody></table></div>
+
+<h2 id="getting-a-key">Getting a key</h2>
+<div class="cards two">
+  <a class="card link" href="api-keys.html#ep-keys-new">
+    <div class="ico">&#128273;</div><b>POST /v1/keys</b>
+    <p>Create one from any authenticated session — or bootstrap the first one from
+    the My Node panel.</p>
+  </a>
+  <a class="card link" href="playground.html">
+    <div class="ico">&#9654;&#65039;</div><b>API Playground</b>
+    <p>Save a Base URL and key once, and every example on this site can fire for
+    real against your node.</p>
+  </a>
+</div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

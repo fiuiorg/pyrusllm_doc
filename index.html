@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyrusLLM Docs</title>
+<meta name="description" content="PyrusLLM — an LLM inference node distributed over Pear. Docs, API reference, a live playground against your own node, and the research behind it.">
+<link rel="icon" href="data:,">
+<script>
+  try {
+    var s = localStorage.getItem('pyrusdocs.theme')
+    if (s) document.documentElement.setAttribute('data-theme', s)
+  } catch (e) {}
+</script>
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body data-root="." data-page="index.html">
+
+<article id="doc">
+
+<div class="hero">
+  <div class="tagline">Owned by no one. Run by everyone.</div>
+  <h1>Turn your machine into a node on a peer‑to‑peer inference marketplace.</h1>
+  <p class="lede">PyrusLLM installs over P2P, updates itself over OTA, and exposes an
+  OpenAI‑compatible endpoint to a swarm of other nodes. Each node announces a signed
+  manifest — what it serves, what it charges, how loaded it is — and every answer that
+  comes back carries provenance: which machine produced it, how fast, and what it cost.</p>
+  <div class="row">
+    <a class="btn" href="docs/install.html">Get started</a>
+    <a class="btn ghost" href="docs/api-inference.html">API reference</a>
+    <a class="btn ghost" href="docs/playground.html">Open the playground</a>
+  </div>
+</div>
+
+<div class="pills">
+  <span class="pill on">v0.12.1</span>
+  <span class="pill">Bare runtime</span>
+  <span class="pill">OpenAI-compatible</span>
+  <span class="pill">Ed25519 signed manifest</span>
+  <span class="pill">x402 payments</span>
+</div>
+
+<div class="sect">The docs</div>
+<div class="cards two">
+  <a class="card link" href="docs/overview.html">
+    <div class="ico">&#128214;</div><b>Overview</b>
+    <p>What PyrusLLM is, how the manifest, the swarm and the wallet fit together, and
+    whether you want the CLI or the API.</p>
+  </a>
+  <a class="card link" href="docs/install.html">
+    <div class="ico">&#9889;</div><b>Install &amp; quickstart</b>
+    <p>Over npm or over Pear. First offline prompt, first gateway, first
+    OpenAI‑shaped curl call in under five minutes.</p>
+  </a>
+  <a class="card link" href="docs/cli.html">
+    <div class="ico">&#128187;</div><b>CLI reference</b>
+    <p><code>prompt</code>, <code>serve</code>, <code>peers</code>, <code>send</code>,
+    <code>fetch</code>, <code>files</code>, <code>wallet</code> — every flag, every
+    footgun called out.</p>
+  </a>
+  <a class="card link" href="docs/api-inference.html">
+    <div class="ico">&#128225;</div><b>API reference</b>
+    <p>Every route the gateway serves: inference, network, keys, economics, wallet,
+    files, upstream. Grouped, not alphabetised.</p>
+  </a>
+</div>
+
+<div class="sect">Try it live</div>
+<div class="cards two">
+  <a class="card link" href="docs/playground.html">
+    <div class="ico">&#9654;&#65039;</div><b>API Playground</b>
+    <p>Point it at your own node — k16 or any machine you run — and fire real requests
+    from the browser. Safe routes execute live; anything that moves funds or revokes
+    access only ever generates a <code>curl</code> you run yourself.</p>
+  </a>
+  <a class="card link" href="docs/research.html">
+    <div class="ico">&#128301;</div><b>Research</b>
+    <p>Four papers on decentralized LLM inference, read closely and mapped against
+    PyrusLLM's own design: what to copy, what to reject, and what to build first.</p>
+  </a>
+</div>
+
+<div class="sect">Reference</div>
+<div class="cards">
+  <a class="card link" href="docs/authentication.html">
+    <div class="ico">&#128273;</div><b>Authentication</b>
+    <p>Bearer keys, per‑client spend caps, and the three routes that need none.</p>
+  </a>
+  <a class="card link" href="docs/api-economics.html">
+    <div class="ico">&#128176;</div><b>Economics &amp; x402</b>
+    <p>Quotas, spend caps, receipts, and the 402 payment‑required flow end to end.</p>
+  </a>
+  <a class="card link" href="docs/panels.html">
+    <div class="ico">&#129517;</div><b>Browser panels</b>
+    <p>Chat, My Node, Network, Wallet, Admin — plain clients of the same public API.</p>
+  </a>
+</div>
+
+</article>
+
+<script src="assets/docs.js"></script>
+</body>
+</html>

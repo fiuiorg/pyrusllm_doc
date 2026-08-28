@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install &amp; quickstart — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/install.html">
+
+<article id="doc">
+<div class="crumb">Documentation / Getting started</div>
+<h1>Install &amp; quickstart</h1>
+<p class="lede">Two ways to get the binary, then three commands to a working
+completion.</p>
+
+<h2 id="install">Install</h2>
+<h4>Over npm</h4>
+<pre><code>npm install -g pyrusllm</code></pre>
+<h4>Over P2P (Pear)</h4>
+<pre><code>pear install pear://8f789f6hsf4ghymku5eqwqmbqiubiigp8xpy6boiymunnbyznpny</code></pre>
+<div class="note i">The npm package ships a Node launcher that delegates to the
+<strong>Bare</strong> runtime; the node itself does not run on Node. The correct Bare
+binary for your platform is pulled in as an optional dependency at install time.</div>
+
+<h2 id="quickstart">Quickstart</h2>
+<h3>1. Answer a prompt, fully offline</h3>
+<pre><code>pyrusllm prompt <span class="c-st">"Explain peer-to-peer in one sentence"</span></code></pre>
+
+<h3>2. Start the gateway and join the network</h3>
+<pre><code>pyrusllm serve <span class="c-fl">--swarm</span> <span class="c-fl">--operator</span> <span class="c-st">"your name"</span></code></pre>
+
+<h3>3. Call it like OpenAI</h3>
+<pre><code>curl http://localhost:8787/v1/chat/completions \
+  -H <span class="c-st">"Authorization: Bearer $PYRUS_KEY"</span> \
+  -H <span class="c-st">"Content-Type: application/json"</span> \
+  -d <span class="c-st">'{"model":"llama1b","messages":[{"role":"user","content":"hello"}],"stream":true}'</span></code></pre>
+
+<div class="note w">You need a key for step 3. Create one from the
+<a href="panels.html">My Node panel</a>, with
+<a href="api-keys.html#ep-keys-new">POST /v1/keys</a>, or from the
+<a href="playground.html">API Playground</a>.</div>
+
+<h2 id="next">Where to next</h2>
+<div class="cards two">
+  <a class="card link" href="cli.html">
+    <div class="ico">&#128187;</div><b>CLI reference</b>
+    <p>Every command and flag: <code>prompt</code>, <code>serve</code>,
+    <code>peers</code>, <code>send</code>, <code>fetch</code>, <code>files</code>,
+    <code>wallet</code>.</p>
+  </a>
+  <a class="card link" href="../docs/playground.html">
+    <div class="ico">&#9654;&#65039;</div><b>API Playground</b>
+    <p>Point the console at your own node and fire real requests without leaving the
+    browser.</p>
+  </a>
+</div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

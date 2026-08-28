@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API — Wallet — PyrusLLM Docs</title>
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/api-wallet.html">
+
+<article id="doc">
+<div class="crumb">Documentation / API reference</div>
+<h1>Wallet</h1>
+<p class="lede">Status and balances are safe to read from anywhere. Everything that
+moves funds signs on the node, never in the browser, and is <code>curl</code>-only in
+the playground.</p>
+
+<h2 id="ep-wallet">Wallet status</h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/wallet</span><span class="auth">Bearer</span><a class="try" href="playground.html?ep=wallet">Try it &rarr;</a></div>
+<p>The payout address, the chains and the settlement asset. Returns
+<code>configured: false</code> when there is no wallet — a normal state for a node
+that only consumes, not an error.</p>
+
+<h2 id="ep-balances">Balances</h2>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/wallet/balances</span><span class="auth">Bearer</span><a class="try" href="playground.html?ep=balances">Try it &rarr;</a></div>
+<div class="ep"><span class="v m get">GET</span><span class="p">/v1/wallet/history</span><span class="auth">Bearer</span><a class="try" href="playground.html?ep=history">Try it &rarr;</a></div>
+<p>Native and token balances, and the movement history read from the explorer.</p>
+
+<h2 id="ep-send">Send funds</h2>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/wallet/send/quote</span><span class="auth">Bearer</span></div>
+<div class="ep"><span class="v m post">POST</span><span class="p">/v1/wallet/send</span><span class="auth">Bearer</span></div>
+<p>Two steps on purpose: <code>quote</code> estimates gas and returns the exact
+fields, and <code>send</code> signs and broadcasts <em>those same fields</em>.
+Re-reading the form between the two would open the door to reviewing one thing and
+sending another.</p>
+<div class="note b"><b>Mainnet requires explicit confirmation.</b> Send
+<code>confirmar: "MAINNET"</code> in the body. This moves real money and cannot be
+undone. <strong>The node signs, never the browser</strong> — the seed never leaves the
+process that opens it.</div>
+<div class="note w">Not executable in the playground — this route moves real funds
+out of the node's wallet. See
+<a href="playground-safety.html">what the playground restricts</a> for the generated
+<code>curl</code>.</div>
+
+<h2 id="ep-wallet-rest">Other wallet routes</h2>
+<div class="tw"><table>
+<thead><tr><th>Route</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>POST /v1/wallet/create</code></td><td>Create a wallet (empty body) or import one (<code>{ frase }</code>). Returns the 24 words <strong>once</strong> for a new wallet</td></tr>
+<tr><td><code>POST /v1/wallet/network</code></td><td>Switch network. No hot-swap: it saves and asks for a restart. Mainnet needs <code>confirmar: "MAINNET"</code></td></tr>
+<tr><td><code>POST /v1/wallet/tokens</code></td><td>Watch an ERC-20: <code>{ address, symbol, decimals }</code></td></tr>
+<tr><td><code>DELETE /v1/wallet/tokens</code></td><td>Stop watching a token</td></tr>
+</tbody></table></div>
+<div class="note w">All four are <code>curl</code>-only in the playground: they create
+key material, change what network the node talks to, or edit what it watches.</div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>
