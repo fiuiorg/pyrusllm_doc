@@ -1,0 +1,877 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyrusLLM</title>
+<meta name="description" content="A peer-to-peer marketplace for AI inference. One binary turns a machine into an inference provider on a live P2P network, behind an OpenAI-compatible gateway.">
+<meta name="color-scheme" content="light dark">
+<style>
+  :root {
+    --bg: #ffffff;
+    --ink: #111111;
+    --mute: #666666;
+    --accent: #1a4fd6;
+
+    /* tokens the payback calculator reads */
+    --surface: #ffffff;
+    --surface-2: #f4f4f4;
+    --line: #e3e3e3;
+    --network: var(--accent);
+    --signal: #a6650a;
+    --signal-ink: #ffffff;
+    /* one-hue sequential ramp for the payback heatmap; every cell prints its
+       number too, so colour is never the only channel */
+    --s1: #dbe8fb; --s1i: #111111;
+    --s2: #a9ccf4; --s2i: #111111;
+    --s3: #5f9be7; --s3i: #111111;
+    --s4: #2a68bf; --s4i: #ffffff;
+    --s5: #123f7d; --s5i: #ffffff;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0b0b;
+      --ink: #e8e8e8;
+      --mute: #9a9a9a;
+      --accent: #7aa7ff;
+
+      --surface: #0b0b0b;
+      --surface-2: #161616;
+      --line: #2a2a2a;
+      --signal: #ffb545;
+      --signal-ink: #16110a;
+      /* stepped from the same hue, not flipped: on a dark surface "more" reads
+         as brighter, so the ramp runs dim -> bright */
+      --s1: #16283e; --s1i: #b9d4f2;
+      --s2: #1d4372; --s2i: #d7e7fb;
+      --s3: #2a6fbd; --s3i: #ffffff;
+      --s4: #4a95e0; --s4i: #0b0b0b;
+      --s5: #8dc2f7; --s5i: #0b0b0b;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html { font-size: 15px; background: var(--bg); }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: ui-monospace, "SF Mono", "IBM Plex Mono", Menlo, monospace;
+    font-size: 1rem;
+    line-height: 1.7;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* foundation logo as a faint emboss on blank paper */
+  .watermark {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(70vw, 620px);
+    z-index: 0;
+    pointer-events: none;
+    user-select: none;
+    filter: invert(1);
+    opacity: .045;
+  }
+  @media (prefers-color-scheme: dark) {
+    .watermark { filter: none; opacity: .05; }
+  }
+
+  main {
+    position: relative;
+    z-index: 1;
+    max-width: 68ch;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 5rem;
+  }
+
+  h1 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    margin: 0 0 1.4rem;
+  }
+
+  h2 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 2.8rem 0 .9rem;
+  }
+  h2::before { content: "## "; color: var(--mute); font-weight: 400; }
+
+  p { margin: 0 0 1.1rem; max-width: 68ch; }
+
+  a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+
+  ul { margin: 0 0 1.1rem; padding-left: 1.4rem; }
+  li { margin: .2rem 0; }
+
+  .note { color: var(--mute); font-size: .92rem; margin-top: -.4rem; }
+
+  pre {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1rem 1.1rem;
+    margin: 0 0 .6rem;
+    overflow-x: auto;
+    font-family: inherit;
+    font-size: .92rem;
+    line-height: 1.65;
+    white-space: pre;
+  }
+
+  .copyrow { margin: 0 0 1.1rem; }
+  .copybtn {
+    font-family: inherit;
+    font-size: .9rem;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  .copybtn:disabled { color: var(--mute); cursor: default; }
+
+  figure { margin: 0 0 1.1rem; }
+  figcaption { color: var(--mute); font-size: .92rem; margin-top: .5rem; }
+
+  footer {
+    position: relative;
+    z-index: 1;
+    max-width: 68ch;
+    margin: 0 auto;
+    padding: 0 1.5rem 4rem;
+    color: var(--mute);
+    font-size: .9rem;
+  }
+
+  /* ------------------------------------------------------- payback calculator
+     Kept verbatim in logic from scripts/eval-dgx-spark.py. Inference over the
+     network costs nothing today; this section models the economics x402 is
+     meant to open up, and every input is editable. */
+  .calc {
+    position: relative;
+    z-index: 1;
+    max-width: 980px;
+    margin: 3rem auto 0;
+    padding: 2.4rem 1.5rem 0;
+    border-top: 1px solid var(--line);
+  }
+  .calc h2 { font-size: 1.05rem; max-width: 40ch; }
+  .calc h2::before { content: "## "; color: var(--mute); font-weight: 400; }
+  .calc .lede { margin-top: .6rem; max-width: 62ch; color: var(--mute); font-size: .95rem; }
+  .calc .cols {
+    margin-top: 2rem;
+    display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+    gap: clamp(1.5rem, 4vw, 2.5rem); align-items: start;
+  }
+  @media (max-width: 900px) { .calc .cols { grid-template-columns: 1fr; } }
+  .calc .cols > * { min-width: 0; }
+
+  .panel {
+    border: 1px solid var(--line); border-radius: 4px; background: var(--bg);
+    padding: 1.3rem 1.35rem 1.4rem;
+  }
+  .panel + .panel { margin-top: 1rem; }
+  .panel > .ph {
+    font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--network); margin: 0 0 1.05rem;
+  }
+  .ctrl { display: grid; gap: .4rem; margin-bottom: 1.05rem; }
+  .ctrl:last-child { margin-bottom: 0; }
+  .ctrl > label {
+    font-size: .73rem; letter-spacing: .03em; text-transform: uppercase;
+    color: var(--mute);
+    display: flex; justify-content: space-between; gap: .75rem; align-items: baseline;
+  }
+  .ctrl > label .rd { color: var(--ink); text-transform: none; letter-spacing: 0; }
+  .calc select, .calc input[type="number"] {
+    font-family: inherit; font-size: .82rem;
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 3px;
+    padding: .5rem .55rem; width: 100%;
+  }
+  .calc input[type="range"] { width: 100%; accent-color: var(--network); }
+  .calc select:focus-visible,
+  .calc input:focus-visible,
+  .calc button:focus-visible { outline: 2px solid var(--network); outline-offset: 2px; }
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
+  .mini { position: relative; display: block; }
+  .mini i {
+    position: absolute; right: .5rem; top: 50%; transform: translateY(-50%);
+    font-size: .68rem; font-style: normal; color: var(--mute); pointer-events: none;
+  }
+  .mini input[type="number"] { padding-right: 3.1rem; }
+  .fine { font-size: .75rem; color: var(--mute); line-height: 1.55; }
+  .fine + .fine { margin-top: .5rem; }
+
+  .verdict {
+    border: 1px solid var(--line); border-radius: 4px;
+    background: var(--bg); padding: 1.4rem 1.5rem;
+  }
+  .verdict .k {
+    font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--mute); margin: 0;
+  }
+  .verdict .v {
+    font-family: inherit;
+    font-size: clamp(1.6rem, 4.4vw, 2.1rem); font-weight: 700;
+    line-height: 1.15; margin: .45rem 0 0; color: var(--ink);
+  }
+  .verdict .why { margin: .85rem 0 0; font-size: .95rem; color: var(--ink); max-width: 58ch; }
+  .verdict .why b { color: var(--signal); font-weight: 700; }
+
+  .machines {
+    margin-top: 1rem;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+    background: var(--line); border: 1px solid var(--line); border-radius: 4px;
+    overflow: hidden;
+  }
+  @media (max-width: 620px) { .machines { grid-template-columns: 1fr; } }
+  .machine { background: var(--bg); padding: 1.2rem 1.3rem 1.35rem; }
+  .machine .top { display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
+  .machine .slot {
+    font-size: .7rem; font-weight: 700;
+    color: var(--signal-ink); background: var(--signal);
+    border-radius: 2px; padding: .05rem .38rem;
+  }
+  .machine h3 { font-size: 1rem; margin: 0; }
+  .machine .spec { font-size: .72rem; color: var(--mute); margin: .3rem 0 0; }
+  .machine .pb {
+    margin-top: 1rem; padding-top: .9rem; border-top: 1px solid var(--line);
+    font-size: 1.9rem; font-weight: 700; line-height: 1.1;
+  }
+  .machine .pb small { display: block; font-size: .4em; font-weight: 500; color: var(--mute); margin-top: .15rem; }
+  .machine .pb.dead { color: var(--mute); }
+  .machine dl { margin: .95rem 0 0; display: grid; gap: .4rem; }
+  .machine dl div { display: flex; justify-content: space-between; gap: .75rem; align-items: baseline; }
+  .machine dt { font-size: .78rem; color: var(--mute); }
+  .machine dd { margin: 0; font-size: .8rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .machine .flag { margin-top: .85rem; font-size: .78rem; color: var(--signal); line-height: 1.5; }
+
+  .sens { margin-top: 1.75rem; }
+  .sens .hd { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+  .sens h3 { font-size: .98rem; margin: 0; }
+  .sens .toggle { display: flex; gap: .3rem; }
+  .sens .toggle button {
+    font-family: inherit; font-size: .74rem;
+    background: none; border: 1px solid var(--line); color: var(--mute);
+    padding: .3rem .7rem; border-radius: 3px; cursor: pointer;
+  }
+  .sens .toggle button[aria-pressed="true"] { border-color: var(--network); color: var(--ink); }
+  .sens .scroll { overflow-x: auto; margin-top: .85rem; }
+  .sens table {
+    width: 100%; min-width: 460px;
+    border-collapse: separate; border-spacing: 2px;
+    font-family: inherit; font-size: .75rem;
+  }
+  .sens caption { caption-side: bottom; margin-top: .7rem; font-size: .75rem; color: var(--mute); text-align: left; line-height: 1.55; }
+  .sens th { font-weight: 500; color: var(--mute); padding: .35rem .5rem; white-space: nowrap; }
+  .sens thead th { text-align: center; }
+  .sens tbody th { text-align: right; }
+  .sens td {
+    text-align: center; padding: .55rem .35rem; border-radius: 2px;
+    font-variant-numeric: tabular-nums; cursor: default;
+  }
+  .sens td.dead { background: var(--surface-2); color: var(--mute); }
+  .sens td.now { box-shadow: inset 0 0 0 2px var(--signal); font-weight: 700; }
+  .ramp {
+    display: flex; align-items: center; gap: .35rem; margin-top: .8rem;
+    font-size: .72rem; color: var(--mute);
+  }
+  .ramp i { width: 1.6rem; height: .55rem; border-radius: 1px; display: block; }
+
+  .tip {
+    position: fixed; z-index: 30; pointer-events: none; opacity: 0;
+    transition: opacity .12s ease;
+    background: var(--ink); color: var(--bg);
+    font-family: inherit; font-size: .72rem; line-height: 1.45;
+    padding: .45rem .6rem; border-radius: 3px; max-width: 26ch;
+  }
+  .tip.on { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .tip { transition: none; } }
+</style>
+</head>
+<body>
+
+<img class="watermark" alt="" aria-hidden="true"
+  src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAmQAAAJkCAMAAACIz82OAAAACXBIWXMAAA7EAAAOxAGVKw4bAAACi1BMVEVHcEz////////////u8wf///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////7////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////b2wD+/vju9Abv9Br///Tu9QPo8wD1+F/v9QX5+pj+/uz8/c3t8wbt8wbv9AXq8QDu7gDt8wbt8gXo6AD2+Hnx9j/w8wT6+7P8/dbz9lHt8gX6/MP9/uTs8QX9/uH+/unv8gbt9gD1+G33+ov3+oPu9wT6+6jt8gTu8wX6+73v9CT9/tz5+p3x9jXv9wDu9Ab///ru8wbu8wXu8wXu9Abu8gf8/tH9/tzu9Ab6/Lr///P5+on193L4+Zf//9b3+IX395v6/bP1+J/7/bD6/LX//5Tz+Zf4+I/5+7b6+qL7/MX5+aj4+J72/5L4+qr7/bb6/a3//5T+/t39/uD2+Hvz+WL5/Kb3+XD///8eN8/0AAAA2HRSTlMAQIHBmSBH7wtLAvOrihI7yqLD3nuCV6FCDff96hUe4vQjWi49Ea+WYekIjhi2fXa14M8lBtPavRca8cimHF8psOcr5QWJAdiH3HBPnU1SYybMrMSVOVz6NccxvzPXmu2YRZ+7UC2T+VTUZoR+a3VkqXnRbGilsrlYDm9JkDZzPgf7eJ73SxayMcjz4CuDkSUPVY0LvKlC0+auYtztNuvwUBy3w788znJs2KHoyqUfW/uKamd+dcnbh6ONoHGrUJg9aEp0lRMsIoE0tFVEHGaLbSbF3YtTuH/W0rQ4AAAEr2lUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSfvu78nIGlkPSdXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQnPz4KPHg6eG1wbWV0YSB4bWxuczp4PSdhZG9iZTpuczptZXRhLyc+CjxyZGY6UkRGIHhtbG5zOnJkZj0naHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyc+CgogPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9JycKICB4bWxuczpBdHRyaWI9J2h0dHA6Ly9ucy5hdHRyaWJ1dGlvbi5jb20vYWRzLzEuMC8nPgogIDxBdHRyaWI6QWRzPgogICA8cmRmOlNlcT4KICAgIDxyZGY6bGkgcmRmOnBhcnNlVHlwZT0nUmVzb3VyY2UnPgogICAgIDxBdHRyaWI6Q3JlYXRlZD4yMDI1LTAzLTAzPC9BdHRyaWI6Q3JlYXRlZD4KICAgICA8QXR0cmliOkV4dElkPjYzNDgzMmNiLWIwNjctNGM4OC04MmZmLTg4YzY2OTY0MzYzZTwvQXR0cmliOkV4dElkPgogICAgIDxBdHRyaWI6RmJJZD41MjUyNjU5MTQxNzk1ODA8L0F0dHJpYjpGYklkPgogICAgIDxBdHRyaWI6VG91Y2hUeXBlPjI8L0F0dHJpYjpUb3VjaFR5cGU+CiAgICA8L3JkZjpsaT4KICAgPC9yZGY6U2VxPgogIDwvQXR0cmliOkFkcz4KIDwvcmRmOkRlc2NyaXB0aW9uPgoKIDxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PScnCiAgeG1sbnM6ZGM9J2h0dHA6Ly9wdXJsLm9yZy9kYy9lbGVtZW50cy8xLjEvJz4KICA8ZGM6dGl0bGU+CiAgIDxyZGY6QWx0PgogICAgPHJkZjpsaSB4bWw6bGFuZz0neC1kZWZhdWx0Jz5sb2dvLmppbmV0ZSAtIDI8L3JkZjpsaT4KICAgPC9yZGY6QWx0PgogIDwvZGM6dGl0bGU+CiA8L3JkZjpEZXNjcmlwdGlvbj4KCiA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0n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QAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEACFACBAChAAhQAgQAoQAIUAIEAKEgAWB/x/AV+1weRLTxQAAAABJRU5ErkJggg==">
+
+<main>
+
+  <h1>PyrusLLM</h1>
+
+  <p>PyrusLLM is a peer-to-peer marketplace for AI inference. One binary turns a
+  machine into an inference provider: it joins a live peer-to-peer network,
+  announces an Ed25519-signed manifest describing the model it runs and the
+  capacity it has, and serves requests through an OpenAI-compatible gateway on
+  127.0.0.1:8787. Any OpenAI client points at that gateway unchanged and is
+  routed to a node by price and availability, with no company in the middle
+  taking a margin or seeing every prompt. Peer-to-peer and local inference cost
+  nothing today; payment over x402, in USDT0 stablecoin and on testnet only, is
+  what starts to change that. The Airbnb of AI compute — or, for anyone who
+  knows the space, a peer-to-peer OpenRouter.</p>
+
+  <h2>Run it from source (recommended)</h2>
+  <pre>git clone https://github.com/gazzimon/qvac_node.git
+cd qvac_node
+npm install            # needs npm &gt;= 10
+npx bare bin.mjs       # app on http://localhost:8787, opens the browser
+npx bare bin.mjs prompt "what is a p2p network?"   # 100% local, nothing opens</pre>
+  <p class="note">This runs the current tree. The OTA-distributed binary can lag
+  behind the repo, and on Linux only the from-source path can load models.</p>
+
+  <h2>Or install the binary</h2>
+  <pre>curl -fsSL https://raw.githubusercontent.com/gazzimon/qvac_node/main/install.sh | sh
+irm https://raw.githubusercontent.com/gazzimon/qvac_node/main/install.ps1 | iex</pre>
+  <p class="note">Linux: the standalone binary installs but can't load models
+  yet — use the from-source path above.</p>
+
+  <h2>Understand it from the source</h2>
+  <p>Hand a coding agent the repo and the prompt below; it reads the source in
+  order and explains the whole system, limits included, at a level a beginner
+  can follow.</p>
+  <figure>
+    <pre id="agent-prompt">You are a coding agent in VS Code (Codex / Claude Code) with terminal access.
+Work from the current source, not from an installed build — the OTA binary can
+lag behind the repo.
+
+  git clone https://github.com/gazzimon/qvac_node.git
+  cd qvac_node
+
+Read these files, in order, and treat the first as the source of truth:
+README.md, then NOTES.md, then ROADMAP_FASE7-X402.md.
+
+Then explain PyrusLLM to a bright 17-year-old who codes a little but has never
+heard of peer-to-peer networks, LLM inference, or crypto payments.
+
+Rules:
+- Plain language. Define every piece of jargon the first time you use it:
+  inference, node, peer-to-peer, gateway, manifest, digital signature,
+  stablecoin.
+- No marketing. If something is not built yet, say so — the README has a
+  "What is real, and what is not" section; respect it.
+- Give one concrete walk-through: step by step, from cloning the repo and
+  running `npx bare bin.mjs` to someone else's request being answered and paid
+  for.
+- Be honest about the limits: the machine running the model sees the prompt in
+  plain text; payments run on a test network only; the Linux binary can't load
+  models yet (run from source).
+- End with two short answers: who would want to run this, and who would want to
+  use it.
+Length: 500–700 words.</pre>
+    <div class="copyrow">
+      <button type="button" class="copybtn" id="copyPrompt">copy the prompt</button>
+    </div>
+    <figcaption>Paste into a VS Code coding agent (Codex / Claude Code) with
+    terminal access.</figcaption>
+  </figure>
+
+  <h2>Links</h2>
+  <ul>
+    <li>the code — <a href="https://github.com/gazzimon/qvac_node">https://github.com/gazzimon/qvac_node</a></li>
+    <li>the documentation — <a href="https://fiuidao.web.app/">https://fiuidao.web.app/</a></li>
+    <li>machine-readable.txt — <a href="./machine-readable.txt">./machine-readable.txt</a></li>
+    <li>what's real, what's not — <a href="https://github.com/gazzimon/qvac_node/blob/main/README.md#what-is-real-and-what-is-not">README.md#what-is-real-and-what-is-not</a></li>
+    <li>roadmap — <a href="https://github.com/gazzimon/qvac_node/blob/main/ROADMAP_FASE7-X402.md">ROADMAP_FASE7-X402.md</a></li>
+    <li>the payback model — <a href="#calculator">the calculator below</a></li>
+  </ul>
+
+</main>
+
+<section class="calc" id="calculator">
+  <h2>What a node could earn once inference is paid for</h2>
+  <p class="lede">Nothing on the network charges today. This models the economics
+    x402 is meant to open up: payback is capital divided by the tokens a machine
+    actually produces, so the question is never "how fast is this hardware", it
+    is "how many hours a day is it producing tokens somebody values". Put two
+    machines side by side. Every assumption below is editable.</p>
+
+  <div class="cols">
+    <div>
+      <div class="panel">
+        <p class="ph">The market</p>
+
+        <div class="ctrl">
+          <label for="c-model">Model served</label>
+          <select id="c-model">
+            <option value="0" selected>Llama 3.1 8B — 4-bit</option>
+            <option value="1">Qwen3 32B — 4-bit</option>
+            <option value="2">Llama 3.3 70B — 4-bit</option>
+            <option value="3">gpt-oss-120b — MoE, ~5B active</option>
+          </select>
+        </div>
+
+        <div class="ctrl">
+          <label for="c-batch">Concurrency</label>
+          <select id="c-batch">
+            <option value="1" selected>One request at a time</option>
+            <option value="8">Batched — 8 at a time</option>
+          </select>
+        </div>
+
+        <div class="ctrl">
+          <label for="c-hours">Hours a day producing <span class="rd" id="c-hours-rd"></span></label>
+          <input type="range" id="c-hours" min="0.5" max="24" step="0.5" value="6">
+        </div>
+
+        <div class="ctrl">
+          <label for="c-price">Value of a token <span class="rd" id="c-price-rd"></span></label>
+          <select id="c-price">
+            <option value="0.30">USD 0.30 — open-model commodity</option>
+            <option value="1">USD 1 — open-model premium</option>
+            <option value="5" selected>USD 5 — Haiku 4.5 output</option>
+            <option value="15">USD 15 — Sonnet 5 output</option>
+            <option value="25">USD 25 — Opus 5 output</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <input type="number" id="c-price-custom" min="0" step="0.05" value="5" hidden aria-label="Custom token value, USD per million output tokens">
+        </div>
+
+        <div class="ctrl">
+          <label for="c-kwh">Electricity <span class="rd">USD / kWh</span></label>
+          <input type="number" id="c-kwh" min="0" step="0.001" value="0.084">
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="ph">The machines</p>
+
+        <div class="ctrl">
+          <label for="c-a">Machine A</label>
+          <select id="c-a" data-slot="a">
+            <option value="gmk" selected>GMKtec K16 — Ryzen 7 7735HS</option>
+            <option value="dgx">NVIDIA DGX Spark</option>
+            <option value="mac">Mac Studio M4 Max — 128 GB</option>
+            <option value="rtx">RTX 4090 desktop</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <div class="duo" style="margin-top:.15rem">
+            <span class="mini"><input type="number" id="c-a-usd" min="0" step="10" aria-label="Machine A price, USD"><i>USD</i></span>
+            <span class="mini"><input type="number" id="c-a-bw" min="1" step="1" aria-label="Machine A memory bandwidth, GB per second"><i>GB/s</i></span>
+          </div>
+          <div class="duo">
+            <span class="mini"><input type="number" id="c-a-mem" min="1" step="1" aria-label="Machine A memory, GB"><i>GB</i></span>
+            <span class="mini"><input type="number" id="c-a-w" min="1" step="5" aria-label="Machine A watts under load"><i>W</i></span>
+          </div>
+        </div>
+
+        <div class="ctrl">
+          <label for="c-b">Machine B</label>
+          <select id="c-b" data-slot="b">
+            <option value="gmk">GMKtec K16 — Ryzen 7 7735HS</option>
+            <option value="dgx" selected>NVIDIA DGX Spark</option>
+            <option value="mac">Mac Studio M4 Max — 128 GB</option>
+            <option value="rtx">RTX 4090 desktop</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <div class="duo" style="margin-top:.15rem">
+            <span class="mini"><input type="number" id="c-b-usd" min="0" step="10" aria-label="Machine B price, USD"><i>USD</i></span>
+            <span class="mini"><input type="number" id="c-b-bw" min="1" step="1" aria-label="Machine B memory bandwidth, GB per second"><i>GB/s</i></span>
+          </div>
+          <div class="duo">
+            <span class="mini"><input type="number" id="c-b-mem" min="1" step="1" aria-label="Machine B memory, GB"><i>GB</i></span>
+            <span class="mini"><input type="number" id="c-b-w" min="1" step="5" aria-label="Machine B watts under load"><i>W</i></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="verdict">
+        <p class="k">The comparison</p>
+        <p class="v" id="c-verdict"></p>
+        <p class="why" id="c-why"></p>
+      </div>
+
+      <div class="machines" id="c-machines"></div>
+
+      <div class="sens">
+        <div class="hd">
+          <h3>Months to pay the machine back</h3>
+          <div class="toggle" role="group" aria-label="Which machine the table shows">
+            <button type="button" data-sens="a" aria-pressed="true">A</button>
+            <button type="button" data-sens="b" aria-pressed="false">B</button>
+          </div>
+        </div>
+        <div class="scroll">
+          <table id="c-sens">
+            <caption>Every cell is the same machine and the same model — only how busy it is and
+              what its tokens are worth change. That spread is the whole business.</caption>
+          </table>
+        </div>
+        <div class="ramp" aria-hidden="true">
+          <span>pays back sooner</span>
+          <i style="background:var(--s5)"></i><i style="background:var(--s4)"></i><i style="background:var(--s3)"></i><i style="background:var(--s2)"></i><i style="background:var(--s1)"></i>
+          <span>later</span>
+        </div>
+      </div>
+
+      <p class="fine" style="margin-top:1.5rem"><b style="color:var(--ink);font-weight:700">How this is computed.</b>
+        Generating a token reads the whole model out of memory once, so throughput is bounded by
+        memory bandwidth: <span>tok/s ≈ bandwidth × 75% ÷ model size</span>. These are
+        physical-limit estimates, <b style="color:var(--ink);font-weight:700">not measurements on the machines</b>,
+        and bandwidth figures come from each machine's memory spec. Prices are list, with no import
+        duty added. Payback is capital ÷ monthly net; NPV discounts 36 months at 12% a year.</p>
+      <p class="fine">Same arithmetic as <span>scripts/eval-dgx-spark.py</span> in the repo,
+        which regenerates the written study.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Fundación Iniciativa Urbana Inteligente · Aleph 2026, Pears Track · Apache-2.0
+  · <a href="https://fiuidao.web.app/">documentation</a>
+</footer>
+
+<script>
+  // The one non-calculator handler: copy the coding-agent prompt to the
+  // clipboard. The <pre> above is fully selectable, so this works with JS off.
+  (function () {
+    var btn = document.getElementById('copyPrompt')
+    var src = document.getElementById('agent-prompt')
+    if (!btn || !src) return
+    btn.addEventListener('click', function () {
+      var text = src.innerText
+      var done = function (msg) {
+        btn.textContent = msg
+        btn.disabled = true
+        setTimeout(function () { btn.textContent = 'copy the prompt'; btn.disabled = false }, 1800)
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { done('copied to clipboard') },
+          function () { done('select it and copy') })
+      } else {
+        done('select it and copy')
+      }
+    })
+  })()
+
+  // --------------------------------------------------------------- payback
+  // Ported from scripts/eval-dgx-spark.py -- same formulas, same constants.
+  // If one side changes and the other does not, this page starts lying about
+  // the study it cites, so they are meant to be edited together.
+  ;(function calculator() {
+    if (!document.getElementById('calculator')) return
+
+    const SEC_PER_MONTH = 30 * 24 * 3600
+    const BW_EFFICIENCY = 0.75 // share of theoretical bandwidth actually reached
+    const HORIZON = 36         // months
+    const R_M = Math.pow(1.12, 1 / 12) - 1
+
+    // usd: list price, no import duty (the K16 figure is the FOB price from
+    // EVALUACION-ECONOMICA.md). bw: GB/s derived from the memory spec, not
+    // measured. w/idle: whole-machine watts, estimates.
+    const MACHINES = {
+      gmk: { name: 'GMKtec K16', sub: 'Ryzen 7 7735HS · 32 GB LPDDR5-6400', usd: 750, bw: 102.4, mem: 32, w: 60, idle: 15 },
+      dgx: { name: 'NVIDIA DGX Spark', sub: 'GB10 · 128 GB LPDDR5x unified', usd: 4800, bw: 273, mem: 128, w: 150, idle: 45 },
+      mac: { name: 'Mac Studio M4 Max', sub: '128 GB unified memory', usd: 3699, bw: 546, mem: 128, w: 160, idle: 12 },
+      rtx: { name: 'RTX 4090 desktop', sub: '24 GB GDDR6X', usd: 2900, bw: 1008, mem: 24, w: 500, idle: 60 },
+      custom: { name: 'Custom machine', sub: 'your own numbers', usd: 1000, bw: 200, mem: 32, w: 100, idle: 20 }
+    }
+
+    // read: GB pulled out of memory per generated token. resident: GB the
+    // weights occupy -- a MoE reads little per token but must still fit whole.
+    // batch: throughput multiplier at 8 concurrent requests.
+    const MODELS = [
+      { name: 'Llama 3.1 8B', read: 4.7, resident: 5.5, batch: 6.0 },
+      { name: 'Qwen3 32B', read: 18.0, resident: 20.0, batch: 4.5 },
+      { name: 'Llama 3.3 70B', read: 40.0, resident: 43.0, batch: 3.5 },
+      { name: 'gpt-oss-120b', read: 3.5, resident: 63.0, batch: 3.0 }
+    ]
+
+    const UTILS = [0.05, 0.10, 0.25, 0.50, 1.00]
+    const PRICES = [0.30, 1, 5, 15, 25]
+    const SLOTS = ['a', 'b']
+
+    const $ = (id) => document.getElementById(id)
+    const num = (id, fallback) => {
+      const v = parseFloat($(id).value)
+      return Number.isFinite(v) && v > 0 ? v : fallback
+    }
+
+    let sensSlot = 'a'
+
+    const tip = document.createElement('div')
+    tip.className = 'tip'
+    tip.setAttribute('role', 'tooltip')
+    document.body.appendChild(tip)
+
+    function powerCost(m, util, kwh) {
+      return (m.w * util + m.idle * (1 - util)) * 720 / 1000 * kwh
+    }
+
+    function npv(rate, flows) {
+      let acc = 0
+      for (let t = 0; t < flows.length; t++) acc += flows[t] / Math.pow(1 + rate, t)
+      return acc
+    }
+
+    // Bisection, same as irr() in the python: npv is monotonically decreasing
+    // in the rate for these flows, so halving always converges.
+    function irr(flows) {
+      let lo = 1e-9, hi = 1
+      for (let i = 0; i < 300; i++) {
+        const mid = (lo + hi) / 2
+        if (npv(mid, flows) > 0) lo = mid
+        else hi = mid
+      }
+      return (lo + hi) / 2
+    }
+
+    function run(m, model, batch, util, price, kwh) {
+      // 10% of memory left for the KV cache and the OS: a model that exactly
+      // equals RAM does not actually run.
+      const fits = model.resident <= m.mem * 0.9
+      const tps = fits ? (m.bw * BW_EFFICIENCY / model.read) * (batch === 8 ? model.batch : 1) : 0
+      const capacity = tps * SEC_PER_MONTH / 1e6 // MTok/month at full saturation
+      const sold = capacity * util
+      const power = powerCost(m, util, kwh)
+      const net = sold * price - power
+      const flows = [-m.usd]
+      for (let t = 0; t < HORIZON; t++) flows.push(net)
+      const value = npv(R_M, flows)
+      return {
+        fits, tps, sold, power, net, npv: value,
+        payback: net > 0 ? m.usd / net : Infinity,
+        irr: net > 0 && value > 0 ? Math.pow(1 + irr(flows), 12) - 1 : null,
+        marginal: sold > 0 ? power / sold : null
+      }
+    }
+
+    const months = (p) =>
+      !isFinite(p) ? 'never' : p > 240 ? '20 yr+' : p < 1.5 ? '1 mo' : Math.round(p) + ' mo'
+    const usd = (n, d) =>
+      n.toLocaleString('en-US', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 })
+
+    // Five steps of one hue. Never a rainbow, and the number is printed in
+    // every cell anyway, so color is a second channel and not the only one.
+    function step(p) {
+      if (!isFinite(p) || p > 240) return 0
+      if (p <= 6) return 5
+      if (p <= 12) return 4
+      if (p <= 24) return 3
+      if (p <= 48) return 2
+      return 1
+    }
+
+    function fillSpecs(slot) {
+      const base = MACHINES[$('c-' + slot).value]
+      $('c-' + slot + '-usd').value = base.usd
+      $('c-' + slot + '-bw').value = base.bw
+      $('c-' + slot + '-mem').value = base.mem
+      $('c-' + slot + '-w').value = base.w
+    }
+
+    function machineFrom(slot) {
+      const key = $('c-' + slot).value
+      const base = MACHINES[key]
+      return {
+        key,
+        name: base.name,
+        sub: base.sub,
+        usd: num('c-' + slot + '-usd', base.usd),
+        bw: num('c-' + slot + '-bw', base.bw),
+        mem: num('c-' + slot + '-mem', base.mem),
+        w: num('c-' + slot + '-w', base.w),
+        idle: base.idle
+      }
+    }
+
+    function priceValue() {
+      const sel = $('c-price').value
+      if (sel !== 'custom') return parseFloat(sel)
+      return num('c-price-custom', 5)
+    }
+
+    function render() {
+      const model = MODELS[parseInt($('c-model').value, 10)]
+      const batch = parseInt($('c-batch').value, 10)
+      const hours = parseFloat($('c-hours').value)
+      const util = hours / 24
+      const price = priceValue()
+      const kwh = num('c-kwh', 0.084)
+
+      $('c-hours-rd').textContent = hours + ' h · ' + Math.round(util * 100) + '% busy'
+      $('c-price-rd').textContent = 'USD / MTok out'
+
+      const specs = SLOTS.map(machineFrom)
+      const results = specs.map((m) => run(m, model, batch, util, price, kwh))
+
+      // ---- the machine columns
+      $('c-machines').innerHTML = specs.map((m, i) => {
+        const r = results[i]
+        const rows = r.fits
+          ? [
+              ['Sustained output', Math.round(r.tps) + ' tok/s'],
+              ['Sold per month', r.sold.toFixed(1) + ' MTok'],
+              ['Net per month', 'USD ' + usd(r.net, 0)],
+              ['Electricity', 'USD ' + usd(r.power, 2)],
+              ['NPV over 36 mo', 'USD ' + usd(r.npv, 0)],
+              ['Annual IRR', r.irr === null ? '—' : Math.round(r.irr * 100) + '%']
+            ]
+          : []
+        return '<div class="machine">' +
+          '<div class="top"><span class="slot">' + SLOTS[i].toUpperCase() + '</span><h3>' + m.name + '</h3></div>' +
+          '<p class="spec">' + m.sub + '</p>' +
+          '<p class="spec">USD ' + usd(m.usd, 0) + ' · ' + m.bw + ' GB/s · ' + m.mem + ' GB</p>' +
+          (r.fits
+            ? '<p class="pb' + (isFinite(r.payback) ? '' : ' dead') + '">' + months(r.payback) +
+              '<small>to pay the machine back</small></p>'
+            : '<p class="pb dead">—<small>' + model.name + ' does not fit in ' + m.mem + ' GB</small></p>') +
+          (rows.length
+            ? '<dl>' + rows.map((x) => '<div><dt>' + x[0] + '</dt><dd>' + x[1] + '</dd></div>').join('') + '</dl>'
+            : '') +
+          (r.fits && !isFinite(r.payback)
+            ? '<p class="flag">At this price and utilisation it never clears its own electricity bill.</p>'
+            : '') +
+          '</div>'
+      }).join('')
+
+      // ---- the one hero figure: which machine wins, and why
+      const [ra, rb] = results
+      const [ma, mb] = specs
+      const v = $('c-verdict')
+      const why = $('c-why')
+
+      // "Pays for itself" has to mean something: past 20 years it does not,
+      // even though the arithmetic still returns a finite number.
+      const viable = (r) => r.fits && isFinite(r.payback) && r.payback <= 240
+
+      // Why a machine failed, in its own terms -- blaming the power bill when
+      // the real problem is that the model does not fit sends people off to
+      // tune the wrong number.
+      const failed = (r, m) =>
+        !r.fits
+          ? '<b>' + m.name + '</b> cannot hold ' + model.name + ' at all: it needs about ' +
+            model.resident + ' GB resident and the machine has ' + m.mem + ' GB.'
+          : !isFinite(r.payback)
+            ? '<b>' + m.name + '</b> never clears its own power bill here — it draws ' +
+              m.w + ' W to produce ' + Math.round(r.tps) + ' tok/s.'
+            : '<b>' + m.name + '</b> takes over twenty years, which is not a payback.'
+
+      if (!ra.fits && !rb.fits) {
+        v.textContent = 'Neither machine can hold this model.'
+        why.innerHTML = '<b>' + model.name + '</b> needs about ' + model.resident +
+          ' GB resident. Pick a smaller model, or give one of them more memory.'
+      } else if (!viable(ra) && !viable(rb)) {
+        v.textContent = 'Neither machine pays for itself.'
+        why.innerHTML = ra.fits && rb.fits
+          ? 'At <b>USD ' + price + ' / MTok</b> and <b>' + hours + ' h a day</b>, the tokens are ' +
+            'worth less than the capital tied up making them. This is the commodity trap: ' +
+            'selling generic tokens cheap never returns the machine.'
+          : failed(ra, ma) + ' ' + failed(rb, mb)
+      } else {
+        const win = viable(ra) && (!viable(rb) || ra.payback <= rb.payback) ? 0 : 1
+        const lose = 1 - win
+        const rw = results[win], rl = results[lose], mw = specs[win], ml = specs[lose]
+        if (!viable(rl)) {
+          v.textContent = mw.name + ' is the only one that pays for itself.'
+          why.innerHTML = failed(rl, ml) + ' <b>' + mw.name + '</b> clears in ' +
+            months(rw.payback) + '.'
+        } else {
+          const ratio = rl.payback / rw.payback
+          v.textContent = mw.name + ' pays back ' + ratio.toFixed(1) + '× sooner.'
+          // Both ratios are winner-over-loser, so "< 1" means the winner is the
+          // smaller one on that axis -- fewer tokens, less money.
+          const tpsR = rl.tps > 0 ? rw.tps / rl.tps : 0
+          const usdR = ml.usd > 0 ? mw.usd / ml.usd : 0
+          why.innerHTML = tpsR < 1 && usdR < 1
+            ? 'It produces <b>' + (1 / tpsR).toFixed(1) + '× fewer tokens per second</b>, but it costs <b>' +
+              (1 / usdR).toFixed(1) + '× less</b>. Payback is capital divided by output, so the cheaper machine wins ' +
+              'whenever its price falls faster than its throughput does.'
+            : 'It clears <b>' + months(rw.payback) + '</b> against <b>' + months(rl.payback) + '</b> — ' +
+              Math.round(rw.tps) + ' tok/s at USD ' + usd(mw.usd, 0) + ', versus ' +
+              Math.round(rl.tps) + ' tok/s at USD ' + usd(ml.usd, 0) + '.'
+        }
+      }
+
+      // ---- sensitivity heatmap for the selected machine
+      const si = sensSlot === 'a' ? 0 : 1
+      const m = specs[si]
+      const closest = UTILS.reduce((best, u) =>
+        Math.abs(u - util) < Math.abs(best - util) ? u : best, UTILS[0])
+
+      let html = '<caption>Every cell is the same machine and the same model — only how busy it is ' +
+        'and what its tokens are worth change. That spread is the whole business.</caption>' +
+        '<thead><tr><th scope="col">Hours a day</th>' +
+        PRICES.map((p) => '<th scope="col">USD ' + p + '</th>').join('') + '</tr></thead><tbody>'
+
+      for (const u of UTILS) {
+        html += '<tr><th scope="row">' + (u * 24).toFixed(u === 0.05 ? 1 : 0) + ' h · ' +
+          Math.round(u * 100) + '%</th>'
+        for (const p of PRICES) {
+          const r = run(m, model, batch, u, p, kwh)
+          const s = step(r.payback)
+          const here = u === closest && p === price
+          const label = !r.fits ? '—' : months(r.payback).replace(' mo', '')
+          const style = s === 0 ? '' : ' style="background:var(--s' + s + ');color:var(--s' + s + 'i)"'
+          html += '<td class="' + (s === 0 ? 'dead' : '') + (here ? ' now' : '') + '"' + style +
+            ' data-tip="' + (u * 24).toFixed(1) + ' h a day at USD ' + p + ' / MTok → ' +
+            (r.fits ? months(r.payback) : 'model does not fit') + '">' + label + '</td>'
+        }
+        html += '</tr>'
+      }
+      $('c-sens').innerHTML = html + '</tbody>'
+    }
+
+    // Editing a spec means it is no longer the preset machine, so the label
+    // stops claiming it is one.
+    for (const slot of SLOTS) {
+      $('c-' + slot).addEventListener('change', () => { fillSpecs(slot); render() })
+      for (const f of ['usd', 'bw', 'mem', 'w']) {
+        $('c-' + slot + '-' + f).addEventListener('input', () => {
+          if ($('c-' + slot).value !== 'custom') $('c-' + slot).value = 'custom'
+          render()
+        })
+      }
+    }
+
+    $('c-price').addEventListener('change', () => {
+      const custom = $('c-price').value === 'custom'
+      $('c-price-custom').hidden = !custom
+      if (custom) $('c-price-custom').focus()
+      render()
+    })
+
+    for (const id of ['c-model', 'c-batch', 'c-hours', 'c-kwh', 'c-price-custom']) {
+      $(id).addEventListener('input', render)
+    }
+
+    document.querySelectorAll('[data-sens]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        sensSlot = btn.dataset.sens
+        document.querySelectorAll('[data-sens]').forEach((b) => {
+          b.setAttribute('aria-pressed', String(b.dataset.sens === sensSlot))
+        })
+        render()
+      })
+    })
+
+    const sens = $('c-sens')
+    sens.addEventListener('pointerover', (ev) => {
+      const cell = ev.target.closest('td[data-tip]')
+      if (!cell) return
+      tip.textContent = cell.dataset.tip
+      const r = cell.getBoundingClientRect()
+      tip.style.left = Math.min(r.left, window.innerWidth - 240) + 'px'
+      tip.style.top = (r.top - 40) + 'px'
+      tip.classList.add('on')
+    })
+    sens.addEventListener('pointerout', () => tip.classList.remove('on'))
+
+    SLOTS.forEach(fillSpecs)
+    render()
+  })()
+</script>
+
+</body>
+</html>

@@ -128,6 +128,7 @@
       '<span class="logo" role="img" aria-label="PyrusLLM"></span><b>PyrusLLM</b>' +
     '</a>' +
     '<span class="ver">' + VERSION + '</span>' +
+    '<a class="ext" href="' + url('landing.html') + '">Landing</a>' +
     '<span class="sp"></span>' +
     '<div class="search">' +
       '<span class="mag">&#9906;</span>' +

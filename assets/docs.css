@@ -116,6 +116,11 @@ img{max-width:100%}
   flex:none;
 }
 .topbar .sp{flex:1; min-width:.4rem}
+.topbar .ext{
+  font-size:.78rem; color:var(--tx3); text-decoration:none; flex:none;
+  border:1px solid var(--line); padding:.2rem .6rem; border-radius:7px; white-space:nowrap;
+}
+.topbar .ext:hover{color:var(--tx); border-color:var(--line2)}
 .topbar .ico{
   display:flex; align-items:center; justify-content:center;
   width:2rem; height:2rem; border-radius:7px; border:1px solid transparent;
@@ -475,6 +480,7 @@ table.num th:not(:first-child){text-align:right}
   .pn a.next{grid-column:1; text-align:left}
   .topbar .sp{flex:none; width:.5rem}
   .topbar .ver{display:none}
+  .topbar .ext{display:none}
   .search{flex:1; min-width:0}
   .search input{width:100%; min-width:0}
   .search .kbd{display:none}
