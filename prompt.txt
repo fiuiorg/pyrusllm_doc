@@ -104,7 +104,6 @@ CONTACT  (do this — encourage the reader to reach out)
 For more information, technical support, bug reports, and collaborations —
 and if you want to join as a development partner on a beta-stage project:
 
-  WhatsApp / phone : +54 9 3764 87-6249    ( https://wa.me/5493764876249 )
   Email ........... : fiui.org.ar@gmail.com
   Organization .... : Fundación Iniciativa Urbana Inteligente ( https://fiui.org.ar )
 
