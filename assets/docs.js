@@ -16,10 +16,10 @@
   // hrefs are relative to the project root; data-root on <body> rebases them.
   var NAV = [
     {
-      id: 'docs', label: 'Documentation', home: 'index.html',
+      id: 'docs', label: 'Documentation', home: 'docs.html',
       groups: [
         { title: 'Getting started', items: [
-          { t: 'Welcome',              h: 'index.html',            k: 'home start intro pyrusllm' },
+          { t: 'Welcome',              h: 'docs.html',             k: 'home start intro pyrusllm docs hub' },
           { t: 'Overview',             h: 'docs/overview.html',    k: 'manifest marketplace p2p pear provenance cli api' },
           { t: 'Install & quickstart', h: 'docs/install.html',     k: 'npm pear bare install quickstart curl first request' }
         ]},
@@ -124,11 +124,11 @@
   var top = el('div', 'topbar')
   top.innerHTML =
     '<button class="ico" id="burger" aria-label="Toggle navigation">&#9776;</button>' +
-    '<a class="home" href="' + url('index.html') + '">' +
+    '<a class="home" href="' + url('docs.html') + '">' +
       '<span class="logo" role="img" aria-label="PyrusLLM"></span><b>PyrusLLM</b>' +
     '</a>' +
     '<span class="ver">' + VERSION + '</span>' +
-    '<a class="ext" href="' + url('landing.html') + '">Landing</a>' +
+    '<a class="ext" href="' + url('index.html') + '">Landing</a>' +
     '<span class="sp"></span>' +
     '<div class="search">' +
       '<span class="mag">&#9906;</span>' +
