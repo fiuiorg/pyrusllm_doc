@@ -12,3 +12,8 @@ Billetera 24 Palabras.txt
 # Tooling / editor
 .playwright-mcp/
 .vscode/
+
+# Firebase
+/public/
+.firebase/
+firebase-debug.log
