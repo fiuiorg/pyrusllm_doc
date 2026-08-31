@@ -18,12 +18,6 @@
 tickets, hands each one to a worker backed by a node's own model, and closes a ticket only
 when CI goes green. Ten nodes without that last part are ten conflicting branches.</p>
 
-<div class="note i"><b>Where this came from.</b> The ask was: given a requirements file and
-a handful of nodes, let them build an application over a week — waking on a cron, working
-unattended. The plumbing for that already existed. The missing piece was never scheduling:
-it was <strong>autonomous verification</strong>. A raw model is a brain, not hands; the
-agent loop, the tools and the gate around it are the work.</p></div>
-
 <h2 id="loop">The loop</h2>
 <pre><code>requirements.md
       │  split into tickets with a dependency DAG
