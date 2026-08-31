@@ -56,6 +56,15 @@
       ]
     },
     {
+      id: 'factory', label: 'Software factory', home: 'docs/factory.html',
+      groups: [
+        { title: 'Software factory', items: [
+          { t: 'Overview',             h: 'docs/factory.html',          k: 'orchestrator worker ticket ci gate requirements build autonomous agent loop' },
+          { t: 'Task protocol',        h: 'docs/factory-protocol.html', k: 'protomux task assign result idempotency attempt authorization cross machine drive coordinator worker' }
+        ]}
+      ]
+    },
+    {
       id: 'research', label: 'Research', home: 'docs/research.html',
       groups: [
         { title: 'Overview', items: [

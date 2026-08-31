@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Software factory — PyrusLLM Docs</title>
+<meta name="description" content="Autonomous software work on PyrusLLM nodes: an orchestrator that splits requirements into tickets, workers that write code, and a CI gate that decides.">
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/factory.html">
+
+<article id="doc">
+<div class="crumb">Software factory</div>
+<h1>Nodes that write software</h1>
+<p class="lede">An orchestrator owns a <code>requirements.md</code>, splits it into
+tickets, hands each one to a worker backed by a node's own model, and closes a ticket only
+when CI goes green. Ten nodes without that last part are ten conflicting branches.</p>
+
+<div class="note i"><b>Where this came from.</b> The ask was: given a requirements file and
+a handful of nodes, let them build an application over a week — waking on a cron, working
+unattended. The plumbing for that already existed. The missing piece was never scheduling:
+it was <strong>autonomous verification</strong>. A raw model is a brain, not hands; the
+agent loop, the tools and the gate around it are the work.</p></div>
+
+<h2 id="loop">The loop</h2>
+<pre><code>requirements.md
+      │  split into tickets with a dependency DAG
+      ▼
+  overlap check   — abort if two tickets declare the same file
+      │
+      ▼
+  one batch = tickets whose files are disjoint, run in parallel
+      │
+      ├── worker: asks the model, parses ```file blocks,
+      │           writes ONLY inside its allowed paths
+      ▼
+  CI gate — the tests run
+      │
+      ├── green → the ticket is done, never attempted again
+      └── red   → picked up by the next run
+      │
+      ▼
+  append-only run log, so a cron resumes instead of redoing</code></pre>
+
+<h2 id="load-bearing">The parts that are load-bearing</h2>
+
+<h3>The gate must not be written by the model</h3>
+<p>The tests that judge the work are seeded before any worker starts and belong to no
+ticket. If the same model wrote both the code and its tests, a green run would prove
+nothing — the cheapest way to pass is a test that always passes. The overlap check does
+not cover this: it stops two <em>tickets</em> from clashing, and the gate is nobody's
+ticket.</p>
+
+<h3>Conflicts are made impossible, not resolved</h3>
+<p>Two tickets are never allowed to declare the same file — the run aborts before anything
+is assigned. That is what lets a batch run in parallel with no merge step: the union of
+what the workers produce cannot collide.</p>
+<p>It also has a cost worth naming: a requirement that cannot be split into disjoint file
+sets — a refactor, a schema change, a shared lockfile — has no path through this design
+today.</p>
+
+<h3>Every limit lives in the harness, none in the prompt</h3>
+<p>Steps and tokens are checked <em>before</em> spending, not after. The per-tool timeout is
+smaller than the task's, so a hung tool fails on its own instead of taking the task down.
+Retries are for transient failures only: a 400 or a failing test is never retried, and a
+timeout gets one retry rather than three — a ten-minute timeout is not a 503.</p>
+
+<h2 id="model">What the model has to be able to do</h2>
+<p>Measured against a Qwen3 4B served locally on CPU:</p>
+
+<div class="tw"><table>
+<thead><tr><th>&nbsp;</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>Emits parseable file blocks</td><td>Yes — including a variant syntax of its own, which the parser had to learn</td></tr>
+<tr><td>Writes two files in one ticket</td><td>Yes</td></tr>
+<tr><td>Respects the allowed paths on its own</td><td><strong>No.</strong> It tried a <code>README.md</code> outside its ticket; the check rejected it</td></tr>
+<tr><td>Solves the task rather than copying the prompt's example</td><td>Yes — once the example stopped being a solution to the task</td></tr>
+<tr><td>Two concurrent requests on one node</td><td>Yes, 109&nbsp;s and 163&nbsp;s side by side</td></tr>
+</tbody></table></div>
+
+<p>A 1B model could not follow the format reliably. Treat roughly 4B as the floor.</p>
+
+<div class="note g"><b>The jail was exercised, not merely present.</b> The model
+<em>attempted</em> the file outside its ticket. The result is not a model politely
+respecting a list — it is a check catching an attempt, which is the only version of that
+result worth anything.</div>
+
+<h2 id="prompt">Four things the prompt cannot do without</h2>
+<p>Each came from a run that failed, and removing any one of them breaks it in a different
+way:</p>
+<ol>
+<li><strong>The example must carry real code.</strong> Replaced with a placeholder comment,
+a small model returned nothing at all: a filler comment is not a mould, and a mould is what
+guides it.</li>
+<li><strong>One path in the whole prompt.</strong> With an example path different from the
+ticket's, the model wrote to the example's — reasonably, it was the one sitting in the
+"this is how a path looks" slot.</li>
+<li><strong>The example must not be the answer.</strong> When the example solved the task,
+a model that merely copied it looked exactly like one that had understood — destroying the
+only thing being measured.</li>
+<li><strong>No meta-instructions.</strong> Two lines explaining the example — "do not copy
+it", "copy the first line exactly" — made a model that had been writing correct code emit
+broken multilingual text <em>about</em> someone unable to follow instructions. The prompt
+says what to deliver; it never discusses itself.</li>
+</ol>
+
+<h2 id="crossing">Crossing machines is built</h2>
+<div class="note g"><b>Was the missing piece; now has a coordinator, a worker, and tests.</b>
+A worker no longer needs the coordinator's local disk: <code>orchestrator/coordinator.mjs</code>
+sends <code>task:assign</code> over the Protomux channel to <code>worker/task-accept.mjs</code>
+(run standalone via <code>worker/serve-tasks.mjs</code>), the workspace crosses as a Hyperdrive
+read sparsely over the connection the two nodes already hold — no DHT announce per ticket —
+and results come back inline in the same message for the common case. See
+<a href="factory-protocol.html">the task protocol</a> for the full shape, what changed from
+the original sketch, and what is still open (a coordinator-election story and
+prompt-injection measurement — the retry ceiling and the global budget shipped in this
+same merge).</div>
+
+<h2 id="state">What is not built</h2>
+<div class="note g"><b>Closed since the first draft of this page.</b>
+<code>scripts/nightly-build.mjs</code> is the cron wrapper: it runs the coordinator once,
+logs the night, and exits non-zero when a human needs to look. <code>--max-attempts</code>
+(default 4) escalates a ticket as <code>ticket:blocked</code> instead of reassigning it
+forever. <code>--budget</code> caps cumulative tokens for the whole project, checked before
+every wave, not per task.</div>
+
+<div class="tw"><table>
+<thead><tr><th>Missing</th><th>Consequence</th></tr></thead>
+<tbody>
+<tr><td>Node specialisation</td><td>The pieces exist — signed manifest, an unused tool allowlist, a RAG index that replicates as a hypercore — but nothing uses them to make a node good at one kind of work.</td></tr>
+<tr><td>Tools beyond writing files</td><td>No shell, no git. The worker writes files and the coordinator runs the tests; that is the whole toolset.</td></tr>
+<tr><td>Prompt-injection measurements</td><td>The prompt states that ticket text and file contents are data, not instructions. That has never been tested — even now that the context drive widens what a worker reads.</td></tr>
+<tr><td>A signed <code>security.acceptsTasks</code></td><td>The manifest schema is frozen (<code>additionalProperties: false</code>, generated outside this repo); authorization for the task protocol is node config (<code>--allow</code> / <code>--worker</code>) instead, for now — see <a href="factory-protocol.html#authz">the protocol's authorization section</a>.</td></tr>
+</tbody></table></div>
+
+<div class="note b"><b>Next:</b> <a href="factory-protocol.html">the task protocol</a> —
+message types, authorization, idempotency and failure handling for the worker that is no
+longer a child process but another machine.</div>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

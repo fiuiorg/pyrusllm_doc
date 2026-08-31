@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Task protocol — Software factory — PyrusLLM Docs</title>
+<meta name="description" content="The wire protocol for assigning software tasks across PyrusLLM nodes: message types, authorization, idempotency and failure handling.">
+<link rel="icon" href="data:,">
+<script>try{var s=localStorage.getItem('pyrusdocs.theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body data-root=".." data-page="docs/factory-protocol.html">
+
+<article id="doc">
+<div class="crumb">Software factory / Protocol</div>
+<h1>The task protocol</h1>
+<p class="lede"><code>qvac/task/v0</code> — how one node hands a unit of software work
+to another, gets the result back, and decides whether to trust it. The protocol
+ships over OTA to every node, and two nodes on different versions is the normal
+case, not the rare one.</p>
+
+<div class="note g"><b>Status: built, phase 1.</b> <code>orchestrator/coordinator.mjs</code>,
+<code>worker/task-accept.mjs</code>, <code>worker/serve-tasks.mjs</code>,
+<code>orchestrator/task-protocol.mjs</code>, <code>orchestrator/context-drive.mjs</code> and
+<code>orchestrator/mirror.mjs</code> exist and are tested: message-layer unit tests, a mirror
++ CI test, an idempotency/resume test, a real corestore-replication test over a non-DHT
+connection, an end-to-end run over a fake swarm, and a one-off smoke test
+(<code>scripts/smoke-real-swarm.mjs</code>) over a real Hyperswarm/DHT connection between
+two independent node identities. Two things in this page changed from the original design
+because they ran into a real constraint — <a href="#manifest-note">the manifest is frozen</a> —
+and are called out where they happen: no <code>task:ack</code>, and authorization is node
+config rather than a signed manifest field, for now. Everything else here is what shipped.
+See <a href="factory.html">the factory overview</a> for the single-machine loop this grows
+out of.</div>
+
+<h2 id="why">The problem this solves</h2>
+<p>The orchestrator today spawns its workers as child processes:</p>
+<pre><code><span class="c-fl">spawn</span>(process.execPath, [<span class="c-st">'worker/run.mjs'</span>, <span class="c-st">'--ticket'</span>, ...])</code></pre>
+<p>That assumes one machine. The worker writes to its local workspace, the orchestrator
+runs CI on <em>its</em> local workspace, and those are the same directory — which is the
+only reason any of it works. Ten nodes under that design are ten machines writing to ten
+disks that nobody joins.</p>
+
+<p>Three things have to cross the boundary: <strong>the assignment</strong> (here is a
+ticket), <strong>the context</strong> (here is the tree you are working against), and
+<strong>the result</strong> (here is what I produced). Each takes a different route, and
+the reasons are below.</p>
+
+<h2 id="shape">The shape</h2>
+<pre><code>┌─ COORDINATOR (orchestrator/coordinator.mjs) ┐
+│  requirements.md → tickets                   │
+│  publishes workspace/ as a read-only         │
+│    Hyperdrive — in its OWN corestore ────────┼──┐
+│                                               │  │
+│  task:assign  ────────────────────────────────┼──┼──▶ Protomux, qvac/task/v0,
+│  ◀── task:accept / task:progress              │  │      over the connection the
+│  ◀── task:result (files INLINE ≤ 1 MiB,       │  │      two nodes already hold —
+│       or a driveKey for the overflow case)    │  │      no new DHT announce
+│                                               │  │
+│  re-validates → mirrors → runs CI            │  │
+└────────────────────────────────────────────────┘  │
+                                                    │ same connection replicates
+   ┌────────────────────────────────────────────────┘ this drive too — mounted
+   ▼                                                   read-only, fetched sparsely
+┌─ WORKER (worker/task-accept.mjs, via serve-tasks.mjs) ┐
+│  accepts only a key on --allow                         │
+│  reads context from the coordinator's                  │
+│    drive — only the paths it opens                     │
+│  infers over HTTP to the LOCAL gateway                  │
+│    (never the engine in-process — see below)            │
+│  validates paths against allowedFiles                    │
+│  returns files inline; only over the ceiling               │
+│    does it write to ITS OWN drive and return a driveKey     │
+└────────────────────────────────────────────────────────────┘</code></pre>
+
+<h3>Why the assignment goes over Protomux</h3>
+<p>The connection already exists and is already authenticated. Hyperswarm introduces the
+peers through the DHT and holepunches, so there is no inbound port to open and NAT is not
+in the way — a point worth stating because it is the usual reason a design like this ends
+up needing a queue. It does not.</p>
+<p>The control channel is also built for exactly this kind of extension. It carries
+<strong>one</strong> JSON message type on purpose, so that a node running an older build
+ignores a <code>type</code> it does not know and keeps going. Adding a message is
+backwards-compatible by construction. <code>qvac/swarm.mjs</code> now dispatches any
+<code>task:*</code> message to a listener either side registers
+(<code>addTaskListener</code>/<code>sendTask</code>); it never invents a second channel.</p>
+
+<h3>Why the context goes over a drive — and never a second connection to get it</h3>
+<p>A worker that can only see the ticket text can write new files and nothing else. Real
+work means modifying code that already exists, which means reading the tree. Hyperdrive
+downloads <strong>sparsely, by path</strong>: the coordinator publishes a 40&nbsp;MB
+workspace and a worker that opens four files transfers four files. This is the case where
+a drive earns its place.</p>
+<p>What changed from the first sketch of this page: the drive is created in the
+coordinator's own corestore and replicates over <strong>the connection the coordinator and
+worker already hold</strong> as marketplace peers — the same thing that already carries
+directory and file replication (<code>corestore.replicate(socket)</code> in
+<code>qvac/swarm.mjs</code>). There is no per-ticket <code>swarm.join</code> on a fresh
+discovery key. Skipping that saves the 2–17s (38s tail, measured) a fresh DHT announce
+costs, on every ticket — the single largest latency item this protocol controls, next to
+the inference itself. See <code>orchestrator/context-drive.mjs</code>.</p>
+
+<h3>Why the result usually travels inline, not over a second drive</h3>
+<p>The control channel shares one multiplexed stream with hypercore replication
+<em>and</em> with the tokens of live inference — sending bulk bytes over it would compete
+with what the node is serving to somebody else. A <strong>separate Hyperdrive per
+ticket</strong> avoids that, but for a handful of KB-sized source files it is more latency
+(create → replicate → discover → sparse-fetch) and more code than the problem needs.</p>
+<p>So <code>task:result</code> carries the files' bytes <strong>inline</strong>, up to a
+1&nbsp;MiB total ceiling — comfortably under the 16&nbsp;MiB frame limit
+<code>NoiseSecretStream</code> enforces below Protomux, and enough for a batch of source
+files with room to spare. Only past that ceiling does a file go on the worker's own Files
+drive (still replicated over the same existing connection, same as the context drive) and
+travel as <code>{ path, hash, drive: true }</code> plus a <code>driveKey</code> instead of
+inline <code>content</code>. See <code>orchestrator/mirror.mjs</code>'s
+<code>INLINE_CEILING</code>.</p>
+<div class="note g"><b>The store-and-forward objection still does not apply, for a
+narrower reason than originally stated.</b> Hypercore is not store-and-forward: the sender
+must be online while the receiver downloads. That is fine here because the overflow drive
+is only used while the worker process — <code>worker/serve-tasks.mjs</code>, a long-lived
+companion process, not a one-shot child — is up and actively seeding the result it just
+produced; it is not claiming the node is 24/7 in general, only that this process is alive
+for exactly as long as the coordinator needs it to be.</div>
+
+<div class="note i" id="manifest-note"><b>Why authorization and this drive choice are node
+config, not manifest fields.</b> The signed manifest schema is frozen
+(<code>manifest-v0.json</code>, <code>additionalProperties: false</code>, generated from a
+zod schema in a package outside this repo) — adding <code>security.acceptsTasks</code> or
+<code>security.maxConcurrentTasks</code> there needs a coordinated schema-version bump, not
+a quick edit. Until then: a coordinator is told which workers to use with
+<code>--worker &lt;hex-key,...&gt;</code>, and a worker is told which coordinators to trust
+with <code>--allow &lt;hex-key,...&gt;</code>. Both still enforce "being on the topic is not
+enough" — just as node config instead of as an advertisement. <code>Coordinator.workers()</code>
+also honours <code>security.acceptsTasks</code> if a future manifest version carries it, so
+this does not need to change again the day the schema catches up.</div>
+
+<h2 id="trust">The trust boundary, and where it moved</h2>
+<div class="note w"><b>A remote worker's jail protects the worker's owner, not the
+coordinator.</b> Today the path check runs inside the worker, and the worker is trusted
+because the orchestrator spawned it. Across machines, that check runs on the other party's
+hardware. A modified — or merely buggy — worker can put anything into its own drive.</div>
+
+<p>Two consequences, and neither is optional:</p>
+<ol>
+<li><strong>The coordinator fetches by declared path, never "everything you have".</strong>
+It knows the ticket's <code>allowedFiles</code> because it assigned them. Anything else in
+the worker's drive is not fetched and not looked at. A file the ticket produced but did
+not declare is lost — which is correct: a ticket that needs to produce a file declares it.</li>
+<li><strong>The jail runs twice.</strong> In the worker (<code>worker/task-runner.mjs</code>,
+via <code>orchestrator/security.mjs</code>'s <code>validateWrite</code>), where it catches
+the honest mistake; and in the coordinator on arrival (<code>orchestrator/mirror.mjs</code>,
+the same <code>validateWrite</code>), where it catches the dishonest one. Same function, two
+sides of the boundary — exercised by <code>test/coordinator-e2e.mjs</code>, which sends a
+worker a spec that tries an out-of-scope file and checks it never reaches the coordinator's
+workspace, with the rejection logged as a <code>violation</code> event either side catches
+it on.</li>
+</ol>
+
+<h2 id="authz">Authorization</h2>
+<p>Being on the topic is enough to be a peer. It must not be enough to make another
+machine work and write to its disk.</p>
+
+<div class="tw"><table>
+<thead><tr><th>Control</th><th>Where</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>worker/serve-tasks.mjs --allow &lt;hex-key,...&gt;</code></td><td>Node config, worker side</td><td>Off by nothing to advertise: the process only exists if you run it, and it accepts <code>task:assign</code> from nobody until a key is on this list.</td></tr>
+<tr><td><code>orchestrator/coordinator.mjs --worker &lt;hex-key,...&gt;</code></td><td>Node config, coordinator side</td><td>Which connected peers this coordinator will actually place work on — see the manifest note above for why this is config today, not a signed field.</td></tr>
+<tr><td><code>security.acceptsTasks</code> / <code>security.maxConcurrentTasks</code></td><td>Signed manifest — <strong>not yet</strong></td><td>What the design originally proposed. <code>Coordinator.workers()</code> already honours these if a peer's manifest carries them, so the day the frozen schema gets a version bump this activates with no further change — it is just not the primary path today.</td></tr>
+</tbody></table></div>
+
+<div class="note i"><b>This is where x402 attaches later.</b> The worker's check —
+"do I accept work from this key?" — is a single point where a payment verification drops
+in without reopening the protocol. Building it now costs three small things. Retrofitting
+it onto a protocol already deployed over OTA costs a migration across every node.</div>
+
+<h2 id="messages">Messages</h2>
+<p>All messages ride the existing single JSON message of <code>qvac/node/v0</code>, with a
+<code>type</code> in the <code>task:</code> namespace. Every one carries
+<code>protocol: "qvac/task/v0"</code>; a receiver that does not recognise the version
+replies <code>task:reject</code> with <code>reason: "unsupported-protocol"</code> rather
+than guessing.</p>
+
+<h3 id="assign">task:assign <span class="m post">coordinator → worker</span></h3>
+<div class="tw"><table>
+<thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>protocol</code></td><td>string</td><td><code>"qvac/task/v0"</code></td></tr>
+<tr><td><code>attemptId</code></td><td>string</td><td>Unique per <strong>assignment</strong>, not per ticket. The idempotency key — see below.</td></tr>
+<tr><td><code>ticketId</code></td><td>string</td><td>Stable across attempts. What the run log keys on.</td></tr>
+<tr><td><code>spec</code></td><td>string</td><td>What to build. Treated as data by the worker, never as instructions.</td></tr>
+<tr><td><code>allowedFiles</code></td><td>string[]</td><td>Exactly the paths this ticket may write. Enforced on both sides.</td></tr>
+<tr><td><code>contextDrive</code></td><td>string</td><td>Hex key of the coordinator's read-only workspace drive.</td></tr>
+<tr><td><code>contextPaths</code></td><td>string[]</td><td>Optional. Files worth reading first. A hint, not a limit — the worker may open anything in the drive.</td></tr>
+<tr><td><code>limits</code></td><td>object</td><td><code>{ maxSteps, maxTokens, toolTimeoutMs, taskTimeoutMs }</code>. Advisory: the worker enforces its own and may be stricter.</td></tr>
+<tr><td><code>deadline</code></td><td>number</td><td>Unix ms after which the coordinator stops waiting. The worker should give up on its own before this.</td></tr>
+</tbody></table></div>
+
+<div class="note w"><b><code>spec</code> and <code>allowedFiles</code> must agree.</b>
+Measured against a 4B model: given a spec asking for three deliverables while the ticket
+permitted one file, the model did not cheerfully write extra files — it looped on the
+contradiction for 253&nbsp;s and produced nothing. That is worse than a violation, because
+a violation at least gets caught and logged. Whatever splits requirements into tickets has
+to hold this invariant.</div>
+
+<h3 id="accept">task:accept · task:reject <span class="m post">worker → coordinator</span></h3>
+<p>Answered immediately, before any work starts, so the coordinator learns quickly that a
+node will not take the job and can place it elsewhere.</p>
+<div class="tw"><table>
+<thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>attemptId</code></td><td>string</td><td>Echoed back.</td></tr>
+<tr><td><code>accepted</code></td><td>boolean</td><td></td></tr>
+<tr><td><code>reason</code></td><td>string</td><td>On refusal: <code>not-authorized</code> · <code>at-capacity</code> · <code>unsupported-protocol</code> · <code>no-model</code> · <code>tasks-disabled</code> · <code>busy-elsewhere</code> (a duplicate <code>attemptId</code>, refused idempotently rather than started twice)</td></tr>
+<tr><td><code>etaMs</code></td><td>number</td><td>Optional, on acceptance. A rough estimate, so the coordinator's timeout is informed rather than arbitrary.</td></tr>
+</tbody></table></div>
+
+<h3 id="progress">task:progress <span class="m post">worker → coordinator</span></h3>
+<p>Optional heartbeat, and the only thing that distinguishes a node thinking hard from a
+node that fell over. Bytes generated, chunks, time to first token — the same numbers
+<code>--log-inference</code> already prints locally. A worker that stops sending these for
+longer than the coordinator's patience is treated as gone.</p>
+
+<h3 id="result">task:result <span class="m post">worker → coordinator</span></h3>
+<div class="tw"><table>
+<thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>attemptId</code></td><td>string</td><td>Only the <em>live</em> attempt's result is accepted.</td></tr>
+<tr><td><code>ok</code></td><td>boolean</td><td>Whether the worker believes it produced something usable. Not a verdict — CI decides.</td></tr>
+<tr><td><code>files</code></td><td>object[]</td><td><code>{ path, hash, bytes, content }</code> per file, <code>content</code> inline as UTF-8 text — up to a 1&nbsp;MiB total across the whole result. <code>hash</code> carries its algorithm inline (<code>sha256:&lt;hex&gt;</code>), the same shape the attestation format uses. A file over the ceiling instead carries <code>{ path, hash, bytes, drive: true }</code>, no <code>content</code>.</td></tr>
+<tr><td><code>driveKey</code></td><td>string</td><td>Present only if at least one file is <code>drive: true</code>. Hex key of the worker's own Files drive, replicated over the same connection the task messages ride — no separate discovery.</td></tr>
+<tr><td><code>rejected</code></td><td>object[]</td><td>Paths the worker's own jail refused. Reported, not hidden: it is the count that says how often something tried to step outside its scope. The coordinator logs these as <code>violation</code> events with <code>side: "worker"</code>, distinct from ones its own re-check on arrival finds (<code>side: "coordinator"</code>).</td></tr>
+<tr><td><code>usage</code></td><td>object</td><td><code>{ steps, tokens, tokenSource }</code>. <code>tokenSource</code> is <code>provider</code> when the model counted and <code>gateway</code> when it was estimated from bytes — the two are never shown as the same thing.</td></tr>
+<tr><td><code>reason</code></td><td>string</td><td>On failure, what happened: <code>limit-reached</code> · <code>no-blocks</code> · <code>reasoning-unclosed</code> · <code>engine-error</code> · <code>context-unavailable</code> · <code>timed-out</code></td></tr>
+</tbody></table></div>
+
+<div class="note i"><b>There is no <code>task:ack</code>.</b> The earliest sketch of this
+page had one, sent once the coordinator finished fetching and verifying, doubling as the
+worker's cue to release its task slot. With results inline under the ceiling there is
+nothing left to seed once <code>task:result</code> is sent, so nothing to acknowledge — the
+worker releases its slot the moment it replies. The overflow drive case does not change
+this either: the worker keeps its Files drive open regardless (it is the same drive
+<code>qvac-node send</code>/<code>fetch</code> already uses), so there is no separate
+lifecycle to close out per ticket.</div>
+
+<h2 id="idempotency">Idempotency</h2>
+<p>The case that forces it: a ticket goes to node B, B goes quiet, the coordinator times
+out and reassigns to C — and then B comes back and delivers. Two results, one ticket.</p>
+
+<div class="tw"><table>
+<thead><tr><th>Layer</th><th>Mechanism</th><th>What it prevents</th></tr></thead>
+<tbody>
+<tr><td>1 · Attempt</td><td>The coordinator mints an <code>attemptId</code> per assignment (<code>Coordinator.live</code>, a ticketId → live-attemptId map) and accepts a result only for the attempt currently live for that ticket.</td><td>A superseded worker's late delivery overwriting fresher work. Discarded with a log line — never silently. <code>Coordinator._onTaskMessage</code>; tested directly in <code>test/coordinator-idempotency-test.mjs</code>.</td></tr>
+<tr><td>2 · Content</td><td>Files carry hashes; a mismatch rejects the whole result rather than writing anything (<code>orchestrator/mirror.mjs</code>).</td><td>A partially-trusted mirror. Makes retrying safe: identical bytes verify and land the same way every time.</td></tr>
+<tr><td>3 · State</td><td>The run log is append-only and <code>done()</code> reads the <em>last</em> event per ticket.</td><td><code>ticket:done</code> becoming a counter instead of a state. Replaying it is harmless. This already worked on one machine — the requirement was not to break it.</td></tr>
+<tr><td>4 · Resume</td><td><code>result:received</code> is appended to the run log the moment a valid <code>task:result</code> arrives, <em>before</em> the mirror or CI run. <code>Coordinator.resume()</code> replays any ticket left at that state on startup.</td><td>A coordinator that dies between accepting a result and closing the ticket reassigning the work and paying for the inference a second time — instead it re-applies the already-logged result, with no worker contacted. Tested in <code>test/state-resume-test.mjs</code> and <code>test/coordinator-idempotency-test.mjs</code>.</td></tr>
+</tbody></table></div>
+
+<div class="note i"><b>The key is per attempt, not per ticket.</b> Keyed per ticket, a
+reassignment reuses it and the second delivery is rejected as a duplicate — which would
+mean a legitimate retry could never deliver at all.</div>
+
+<h2 id="capacity">Capacity, and a gauge that does not lie</h2>
+<p>A node working on a ticket is using its GPU. If that does not show up in what it
+advertises, the manifest is lying to whoever is choosing where to route.</p>
+<p><strong>Count inferences in flight, not tasks open.</strong> A task's inference calls go
+through the same path as any other request and occupy a slot for their duration. Between
+inferences — parsing, writing files — the node genuinely is not busy. Counting per
+inference is both simpler and more truthful than reserving a slot for the whole task.</p>
+<p>This is exactly why <code>worker/task-accept.mjs</code> calls the LOCAL gateway over
+HTTP for every completion instead of the engine in-process: the gateway's
+<code>store.beginRequest</code>/<code>endRequest</code> is the one place this count is kept,
+and a task's inference goes through it like any other request. An in-process engine call
+would bypass that counter and the manifest would start lying the moment a node picked up
+task work — see the discussion of this in the repo's own audit of this design.</p>
+<p>Willingness to commit is a separate number — <code>maxConcurrentTasks</code>, still node
+config today rather than a manifest field, per the note above. A node with three request
+slots should not accept fifty tasks and interleave them.</p>
+
+<h2 id="failure">When things break</h2>
+<div class="tw"><table>
+<thead><tr><th>Failure</th><th>What happens</th></tr></thead>
+<tbody>
+<tr><td>Worker never accepts</td><td>Short timeout on <code>task:assign</code>; the coordinator offers the ticket to the next node in its pool.</td></tr>
+<tr><td>Worker goes silent mid-task</td><td>No <code>task:progress</code> past the deadline ⇒ the attempt is abandoned and reassigned with a fresh <code>attemptId</code>. Layer 1 handles the ghost that comes back.</td></tr>
+<tr><td>Connection drops, then reconnects before the deadline</td><td>Hyperswarm reconnects on its own, and messages resume flowing under the same peer key — nothing special has to happen for a <code>task:progress</code>/<code>task:result</code> that arrives after a reconnect. <strong>Not built:</strong> there is no <code>task:status</code> message to actively probe an attempt's state after a drop; today the coordinator only finds out via the next message that arrives, or via the progress deadline.</td></tr>
+<tr><td>Files do not match their hashes</td><td>Rejected wholesale. A partially trusted result is worse than none.</td></tr>
+<tr><td>A path outside <code>allowedFiles</code></td><td>Not written on the coordinator's side even if it somehow arrived. Logged as a <code>violation</code> event — this is the number that says how often a worker tried to step outside its ticket.</td></tr>
+<tr><td>The coordinator process dies after accepting a result</td><td><code>result:received</code> is already in the run log (idempotency layer 4) — the next <code>coord.run()</code> mirrors and re-runs CI from the log, no worker contacted.</td></tr>
+<tr><td>CI red</td><td>The ticket stays open for the next run. <strong>Unresolved:</strong> nothing caps how many times a ticket may be reattempted, so today it would be retried forever.</td></tr>
+</tbody></table></div>
+
+<h2 id="versioning">Versioning</h2>
+<p>The channel was built so that adding a message type is backwards-compatible: an older
+node ignores what it does not recognise. That covers new messages. It does not cover a
+changed <em>field</em> in an existing one.</p>
+<ul>
+<li>Every message carries <code>protocol</code>. Unknown version ⇒ <code>task:reject</code>, never a guess.</li>
+<li>New fields are additive and optional. A worker must run correctly with only the fields of the version it knows.</li>
+<li>A breaking change is <code>qvac/task/v1</code>, a new namespace, spoken alongside v0 until nodes have rolled over.</li>
+</ul>
+<div class="note w">With OTA running, two nodes on different versions is the <b>normal</b>
+state, not the exception. Any design that assumes both sides upgraded together is a design
+that breaks on the day it ships.</div>
+
+<h2 id="open">Open questions</h2>
+<ol>
+<li><strong>Closed since this page was first drafted:</strong> a retry ceiling
+(<code>--max-attempts</code>, default 4, escalates as <code>ticket:blocked</code>) and a
+global token budget (<code>--budget</code>, checked before every wave) both shipped in
+<code>orchestrator/coordinator.mjs</code>, and <code>scripts/nightly-build.mjs</code> is
+now the cron wrapper these seven-day runs use.</li>
+<li><strong>Coordinator election.</strong> The role is requested by one node today. What
+happens if two claim the same <code>requirements.md</code> is undefined — and it is the
+kind of undefined that shows up as two workers doing the same ticket. Unchanged by this
+build: <code>orchestrator/coordinator.mjs</code> assumes it is the only coordinator for its
+<code>requirements.md</code>.</li>
+<li><strong>Prompt injection.</strong> The worker's prompt states that spec text and file
+contents are data, not instructions. <em>That the jail catches a path that tries to escape
+its ticket is tested</em> (<code>test/coordinator-e2e.mjs</code>) — but whether hostile text
+sitting in a context file can talk a model into something the jail does not check for (a
+misleading comment, a subtly wrong implementation, tool use if any is ever added) has never
+been measured. The context drive widens what a worker reads, which is exactly where such
+text would arrive.</li>
+<li><strong>An active <code>task:status</code> probe.</strong> Not built. Today a dropped
+connection is discovered passively — by the next message that does or does not arrive,
+or by the progress deadline — rather than by the coordinator asking. Before reassigning
+(and paying for a fresh inference), a short probe to a still-connected-but-silent worker
+could recover a result that in fact already finished; see "When things break" above.</li>
+<li><strong>The manifest schema.</strong> <code>security.acceptsTasks</code> and
+<code>security.maxConcurrentTasks</code> are still not real fields — see the note by the
+authorization table. The code already reads them if they show up, so this is a schema
+change to coordinate with <code>manifest-v0.json</code>'s source package, not a code change
+here.</li>
+</ol>
+
+</article>
+
+<script src="../assets/docs.js"></script>
+</body>
+</html>

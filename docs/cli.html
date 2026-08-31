@@ -67,7 +67,10 @@ command that turns on the HTTP API.</strong></p>
 <tr><td><code>--operator &lt;name&gt;</code></td><td>Operator name announced in the manifest</td></tr>
 <tr><td><code>--demo</code></td><td>Populate the registry with simulated nodes (1 real + 3 mocks)</td></tr>
 <tr><td><code>--no-store</code></td><td>Do not open the Hyperbee/Hyperdrive: no persistence, no files</td></tr>
+<tr><td><code>--model &lt;alias&gt;</code></td><td>Model this node serves — the one advertised in the manifest AND the one the engine loads, a single source</td></tr>
+<tr><td><code>--ctx &lt;n&gt;</code></td><td>Model's context window. Prompt + reasoning + answer together: a "thinking" model with too small a window runs out of room before answering</td></tr>
 <tr><td><code>--gpu-layers &lt;n&gt;</code></td><td>Layers to send to the real node's GPU. <code>0</code> = all CPU</td></tr>
+<tr><td><code>--log-inference</code></td><td>Log TTFT, bytes and chunks every 5s per generation. Without it, an answer that takes minutes looks exactly like a hung process</td></tr>
 </tbody></table></div>
 <div class="note i">Without <code>--swarm</code> the gateway serves the panels and the
 API but stays off the network: the registry starts <strong>empty</strong> and requests
