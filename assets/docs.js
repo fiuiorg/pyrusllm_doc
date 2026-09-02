@@ -60,7 +60,8 @@
       groups: [
         { title: 'Software factory', items: [
           { t: 'Overview',             h: 'docs/factory.html',          k: 'orchestrator worker ticket ci gate requirements build autonomous agent loop' },
-          { t: 'Task protocol',        h: 'docs/factory-protocol.html', k: 'protomux task assign result idempotency attempt authorization cross machine drive coordinator worker' }
+          { t: 'Task protocol',        h: 'docs/factory-protocol.html', k: 'protomux task assign result idempotency attempt authorization cross machine drive coordinator worker' },
+          { t: 'Tests',                h: 'docs/factory-tests.html',    k: 'runs k16 real node model qwen katcoder gptoss gate collapse no-blocks results pages evidence' }
         ]}
       ]
     },
